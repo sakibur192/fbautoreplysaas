@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Never miss a customer message — AI auto-reply for Facebook & WhatsApp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14231F;
+    --paper: #FAF7F0;
+    --teal: #1F5F52;
+    --gold: #C98A2C;
+    --sage: #6B7B75;
+    --line: #DDD5C4;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+  }
+  h1, h2, h3 { font-family: 'Fraunces', serif; font-weight: 600; margin: 0; line-height: 1.15; }
+  a { color: var(--teal); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+  header.site {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 28px; max-width: 1080px; margin: 0 auto;
+  }
+  .brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; }
+  .brand span { color: var(--teal); }
+  header.site a.login { font-size: 14px; font-weight: 600; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+
+  .hero { padding: 40px 0 70px; }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
+  .hero h1 { font-size: 44px; max-width: 480px; }
+  .hero p.lede { font-size: 17px; color: var(--sage); max-width: 440px; margin-top: 18px; }
+
+  .cta-inline { margin-top: 30px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; background: var(--gold); color: #241605; font-weight: 600;
+    padding: 13px 26px; border-radius: 3px; border: none; cursor: pointer; font-size: 15px;
+    text-decoration: none; font-family: 'Inter', sans-serif;
+  }
+  .btn.outline { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+
+  /* chat mockup */
+  .mockup {
+    background: #fff; border: 1px solid var(--line); border-radius: 6px;
+    padding: 22px; box-shadow: 0 12px 30px -18px rgba(20,35,31,0.35);
+  }
+  .mockup .platform-tag { font-size: 12px; color: var(--sage); margin-bottom: 14px; }
+  .bubble { padding: 10px 14px; border-radius: 10px; max-width: 78%; margin-bottom: 10px; font-size: 14px; }
+  .bubble.customer { background: #F0EDE3; }
+  .bubble.reply { background: var(--teal); color: #fff; margin-left: auto; }
+  .bubble.reply .timing { display: block; font-size: 11px; opacity: 0.75; margin-top: 4px; }
+
+  section.steps { padding: 64px 0; border-top: 1px solid var(--line); }
+  section.steps h2 { font-size: 28px; margin-bottom: 34px; max-width: 480px; }
+  .step-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .step { border-top: 1px solid var(--ink); padding-top: 14px; }
+  .step .num { font-family: 'Fraunces', serif; font-size: 26px; color: var(--gold); }
+  .step h3 { font-size: 17px; margin-top: 8px; }
+  .step p { font-size: 14px; color: var(--sage); margin-top: 8px; }
+
+  section.pricing { padding: 64px 0; border-top: 1px solid var(--line); }
+  .price-card {
+    border: 1px solid var(--line); border-radius: 6px; padding: 36px;
+    max-width: 480px; background: #fff;
+  }
+  .price-card .amount { font-family: 'Fraunces', serif; font-size: 42px; }
+  .price-card .amount small { font-family: 'Inter', sans-serif; font-size: 15px; color: var(--sage); font-weight: 500; }
+  .price-card ul { list-style: none; padding: 0; margin: 22px 0; }
+  .price-card li { padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .price-card li:first-child { border-top: none; }
+  .trial-note { font-size: 13px; color: var(--sage); margin-top: 14px; }
+
+  section.signup { padding: 64px 0 90px; border-top: 1px solid var(--line); }
+  .signup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
+  .signup-grid h2 { font-size: 28px; max-width: 380px; }
+  .signup-grid p { color: var(--sage); font-size: 14px; margin-top: 14px; max-width: 360px; }
+  form.signup-form label { display: block; font-size: 13px; font-weight: 600; margin-top: 14px; }
+  form.signup-form input {
+    width: 100%; padding: 11px; border: 1px solid var(--line); border-radius: 3px;
+    margin-top: 5px; font-size: 14px; font-family: 'Inter', sans-serif;
+  }
+  form.signup-form button { margin-top: 22px; width: 100%; }
+  #signup-error { color: #a33; font-size: 13px; margin-top: 10px; }
+  #signup-success { color: var(--teal); font-size: 14px; margin-top: 10px; font-weight: 600; }
+
+  footer { border-top: 1px solid var(--line); padding: 28px; text-align: center; font-size: 13px; color: var(--sage); }
+
+  @media (max-width: 820px) {
+    .hero-grid, .signup-grid { grid-template-columns: 1fr; }
+    .step-list { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 34px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="brand">Uttor<span>AI</span></div>
+  <a class="login" href="/admin">Log in</a>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Your Page and WhatsApp answer customers even when you can't.</h1>
+      <p class="lede">Set up your products and your voice once. From then on, an AI trained on your shop replies to Facebook and WhatsApp messages within seconds — day or night.</p>
+      <div class="cta-inline">
+        <a href="#signup" class="btn">Start 3-day free trial</a>
+        <a href="#pricing" class="btn outline">See pricing</a>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="platform-tag">WhatsApp · 11:42 PM</div>
+      <div class="bubble customer">Apnader shirt ta ki stock ache? Price koto?</div>
+      <div class="bubble reply">Ji, stock e ache — sizes M/L/XL, price 850 taka. Color: black o navy blue. Order korte chaile bolben.<span class="timing">Replied in 4 seconds</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="steps">
+  <div class="wrap">
+    <h2>Set up once, running in an afternoon.</h2>
+    <div class="step-list">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Connect your Page and number</h3>
+        <p>Link your Facebook Page and scan a QR code to connect WhatsApp — no coding, no approval wait.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Add your products</h3>
+        <p>List what you sell, prices, and details. This becomes the only source the AI answers from.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Let it answer</h3>
+        <p>Every incoming message gets a reply in your shop's voice. Take over any conversation yourself, anytime.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <div class="price-card">
+      <div class="amount">৳1,000 <small>/ month</small></div>
+      <ul>
+        <li>Unlimited Facebook Page replies</li>
+        <li>Unlimited WhatsApp replies</li>
+        <li>Your own product catalog</li>
+        <li>Conversation log, with manual takeover anytime</li>
+        <li>Cancel anytime</li>
+      </ul>
+      <a href="#signup" class="btn">Start free trial</a>
+      <div class="trial-note">3 days free, no payment needed to start. Pay by bKash once you're ready to continue.</div>
+    </div>
+  </div>
+</section>
+
+<section class="signup" id="signup">
+  <div class="wrap signup-grid">
+    <div>
+      <h2>Start your free trial</h2>
+      <p>Three days, full access, nothing to pay yet. Set up your shop and see real replies go out before you decide.</p>
+    </div>
+    <form class="signup-form" onsubmit="return doSignup(event)">
+      <label>Business name</label>
+      <input id="s-business" type="text" required />
+      <label>Email</label>
+      <input id="s-email" type="email" required />
+      <label>Password</label>
+      <input id="s-password" type="password" required minlength="6" />
+      <button class="btn" type="submit">Create my account</button>
+      <div id="signup-error"></div>
+      <div id="signup-success"></div>
+    </form>
+  </div>
+</section>
+
+<footer>
+  Already have an account? <a href="/admin">Log in here</a>.
+</footer>
+
+<script>
+async function doSignup(e) {
+  e.preventDefault();
+  const business_name = document.getElementById('s-business').value.trim();
+  const email = document.getElementById('s-email').value.trim();
+  const password = document.getElementById('s-password').value;
+  const errBox = document.getElementById('signup-error');
+  const okBox = document.getElementById('signup-success');
+  errBox.textContent = '';
+  okBox.textContent = '';
+
+  const res = await fetch('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_name, email, password })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    okBox.textContent = "You're in — redirecting to your admin panel...";
+    setTimeout(() => window.location.href = '/admin', 900);
+  } else {
+    errBox.textContent = data.error || 'Something went wrong, please try again.';
+  }
+  return false;
+}
+</script>
+</body>
+</html>

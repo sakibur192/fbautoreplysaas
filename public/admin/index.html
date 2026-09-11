@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Admin Panel</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f5f7; color: #1a1a1a; }
+  #login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; }
+  .card { background: #fff; border-radius: 10px; padding: 28px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; }
+  .card button, .btn { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .btn.danger { background: #dc2626; }
+  .btn.secondary { background: #64748b; }
+  #app { display: none; }
+  header { background: #111827; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+  nav { display: flex; gap: 4px; background: #fff; padding: 10px 24px; border-bottom: 1px solid #e5e7eb; }
+  nav button { background: none; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; color: #374151; }
+  nav button.active { background: #2563eb; color: #fff; }
+  main { padding: 24px; max-width: 900px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  label { display: block; margin-top: 14px; font-weight: 600; font-size: 13px; color: #374151; }
+  input[type=text], input[type=password], input[type=email], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-top: 4px; font-size: 14px; }
+  textarea { min-height: 90px; }
+  .row { display: flex; gap: 24px; }
+  .col { flex: 1; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .badge.connected { background: #dcfce7; color: #166534; }
+  .badge.qr { background: #fef9c3; color: #854d0e; }
+  .badge.disconnected { background: #fee2e2; color: #991b1b; }
+  .conv-list { list-style: none; padding: 0; margin: 16px 0; }
+  .conv-list li { background: #fff; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+  .stat-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); text-align: center; }
+  .stat-card .num { font-size: 28px; font-weight: 700; color: #2563eb; }
+  .stat-card .label { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .stat-card.paid .num { color: #16a34a; }
+  .stat-card.cancelled .num { color: #dc2626; }
+  .msg-thread { background: #fff; border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto; margin-top: 12px; }
+  .msg { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; max-width: 70%; }
+  .msg.in { background: #e5e7eb; }
+  .msg.out { background: #dbeafe; margin-left: auto; }
+  .save-msg { color: #166534; font-size: 13px; margin-left: 12px; }
+  #qr-box img { width: 220px; height: 220px; }
+  #status-banner { padding: 10px 24px; font-size: 14px; font-weight: 600; text-align: center; }
+  #status-banner.trial { background: #fef9c3; color: #854d0e; }
+  #status-banner.expired { background: #fee2e2; color: #991b1b; }
+  #status-banner.active { display: none; }
+  .pay-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .pay-table th, .pay-table td { text-align: left; padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .status-pill { padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .status-pill.pending { background: #fef9c3; color: #854d0e; }
+  .status-pill.approved { background: #dcfce7; color: #166534; }
+  .status-pill.rejected { background: #fee2e2; color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="card">
+    <h2>Log in to your admin panel</h2>
+    <input id="login-email" type="email" placeholder="Email" />
+    <input id="login-pass" type="password" placeholder="Password" />
+    <button onclick="doLogin()">Log in</button>
+    <div id="login-error" style="color:#dc2626; margin-top:8px; font-size:13px;"></div>
+    <p style="font-size:13px; margin-top:14px;">New here? <a href="/">Start your free trial</a></p>
+  </div>
+</div>
+
+<div id="app">
+  <div id="impersonation-banner" style="display:none; background:#1e3a8a; color:#fff; padding:8px 24px; font-size:13px; justify-content:space-between; align-items:center;">
+    <span>Viewing this account as super admin.</span>
+    <button class="btn secondary" style="padding:4px 12px;" onclick="exitImpersonation()">Exit to Super Admin</button>
+  </div>
+  <div id="status-banner"></div>
+  <header>
+    <strong id="header-business-name">Admin Panel</strong>
+    <button class="btn secondary" onclick="doLogout()">Log out</button>
+  </header>
+  <nav>
+    <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">Settings</button>
+    <button class="tab-btn" data-tab="whatsapp" onclick="showTab('whatsapp')">WhatsApp</button>
+    <button class="tab-btn" data-tab="products" onclick="showTab('products')">Products</button>
+    <button class="tab-btn" data-tab="orders" onclick="showTab('orders')">Orders</button>
+    <button class="tab-btn" data-tab="conversations" onclick="showTab('conversations')">Conversations</button>
+    <button class="tab-btn" data-tab="billing" onclick="showTab('billing')">Billing</button>
+  </nav>
+
+  <main>
+    <!-- DASHBOARD TAB -->
+    <div class="tab active" id="tab-dashboard">
+      <div class="card">
+        <h3>Overview</h3>
+        <div class="stat-grid" style="margin-top:14px;">
+          <div class="stat-card">
+            <div class="num" id="stat-total-replies">—</div>
+            <div class="label">Total replies sent</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-replies-today">—</div>
+            <div class="label">Replies today</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-total-conversations">—</div>
+            <div class="label">Conversations</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-fb-conversations">—</div>
+            <div class="label">Facebook chats</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-wa-conversations">—</div>
+            <div class="label">WhatsApp chats</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top:26px;">Orders</h3>
+        <div class="stat-grid" style="margin-top:14px;">
+          <div class="stat-card">
+            <div class="num" id="stat-orders-total">—</div>
+            <div class="label">Total orders</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-orders-confirmed">—</div>
+            <div class="label">Awaiting payment</div>
+          </div>
+          <div class="stat-card paid">
+            <div class="num" id="stat-orders-paid">—</div>
+            <div class="label">Paid</div>
+          </div>
+          <div class="stat-card cancelled">
+            <div class="num" id="stat-orders-cancelled">—</div>
+            <div class="label">Cancelled</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div class="tab" id="tab-settings">
+      <div class="card">
+        <h3>AI Provider</h3>
+        <div class="toggle-row">
+          <input type="radio" name="ai-provider" id="ai-provider-openai" value="openai" onchange="onAiProviderChange()" />
+          <span>OpenAI (ChatGPT)</span>
+        </div>
+        <div class="toggle-row">
+          <input type="radio" name="ai-provider" id="ai-provider-gemini" value="gemini" onchange="onAiProviderChange()" />
+          <span>Google Gemini</span>
+        </div>
+
+        <div id="openai-panel" style="margin-top:16px;">
+          <label>OpenAI API Key <span id="key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+          <input id="openai_api_key" type="text" placeholder="sk-..." />
+          <label>Model</label>
+          <select id="openai_model">
+            <option value="gpt-4o-mini">gpt-4o-mini (fast, cheap)</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4-turbo">gpt-4-turbo</option>
+          </select>
+        </div>
+
+        <div id="gemini-panel" style="margin-top:16px; display:none;">
+          <label>Gemini API Key <span id="gemini-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+          <input id="gemini_api_key" type="text" placeholder="AIza..." />
+          <label>Model</label>
+          <input id="gemini_model" type="text" placeholder="e.g. gemini-3.5-flash" />
+          <p style="color:#6b7280; font-size:12px;">Get a key from <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Check their docs for the current model name if replies stop working — model names change often.</p>
+        </div>
+
+        <label style="margin-top:20px;">System Prompt (the bot's personality / instructions)</label>
+        <textarea id="system_prompt"></textarea>
+
+        <div class="toggle-row">
+          <input type="checkbox" id="order_tools_enabled" />
+          <span>Let the AI confirm orders and record payments automatically</span>
+        </div>
+
+        <h3 style="margin-top:24px;">Facebook Page</h3>
+        <div class="toggle-row">
+          <input type="checkbox" id="fb_enabled" />
+          <span>Enable Facebook auto-reply</span>
+        </div>
+        <label>Facebook Page ID</label>
+        <input id="fb_page_id" type="text" placeholder="e.g. 102938475610234" />
+        <label>Page Access Token</label>
+        <input id="fb_page_access_token" type="text" placeholder="EAAG..." />
+
+        <h3 style="margin-top:24px;">WhatsApp</h3>
+        <div class="toggle-row">
+          <input type="checkbox" id="whatsapp_enabled" />
+          <span>Enable WhatsApp auto-reply</span>
+        </div>
+
+        <div style="margin-top:20px;">
+          <button class="btn" onclick="saveSettings()">Save Settings</button>
+          <span class="save-msg" id="save-msg"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WHATSAPP TAB -->
+    <div class="tab" id="tab-whatsapp">
+      <div class="card">
+        <h3>Connection method</h3>
+        <div class="toggle-row">
+          <input type="radio" name="wa-mode" id="wa-mode-qr" value="qr" onchange="onWaModeChange()" />
+          <span>QR Code — quick setup, unofficial (scan with your phone)</span>
+        </div>
+        <div class="toggle-row">
+          <input type="radio" name="wa-mode" id="wa-mode-cloud" value="cloud_api" onchange="onWaModeChange()" />
+          <span>Official Cloud API — needs a Meta Business WhatsApp setup, no ban risk</span>
+        </div>
+
+        <div id="wa-qr-panel" style="margin-top:20px;">
+          <h4>WhatsApp Connection <span id="wa-badge" class="badge disconnected">disconnected</span></h4>
+          <p id="wa-instructions">Click Connect, then scan the QR code with WhatsApp on your phone (Settings → Linked Devices → Link a Device).</p>
+          <div id="qr-box"></div>
+          <button class="btn" id="wa-connect-btn" onclick="connectWhatsapp()">Connect</button>
+          <button class="btn danger" onclick="resetWhatsapp()">Disconnect / Reset Session</button>
+        </div>
+
+        <div id="wa-cloud-panel" style="margin-top:20px; display:none;">
+          <h4>Official WhatsApp Cloud API</h4>
+          <p style="color:#6b7280; font-size:13px;">Set this up once in <a href="https://developers.facebook.com" target="_blank">Meta for Developers</a> under your Business App's WhatsApp product. You'll get a Phone Number ID and a permanent Access Token to paste below.</p>
+          <label>Phone Number ID</label>
+          <input id="wa_cloud_phone_number_id" type="text" placeholder="e.g. 109876543210987" />
+          <label>Access Token</label>
+          <input id="wa_cloud_access_token" type="text" placeholder="EAAG..." />
+          <div style="margin-top:12px;">
+            <button class="btn" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCTS TAB -->
+    <div class="tab" id="tab-products">
+      <div class="card">
+        <h3>Products</h3>
+        <p style="color:#6b7280; font-size:13px;">This list is given to the AI as its product knowledge — it will only answer using what's here.</p>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px;" id="product-table">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #e5e7eb;">
+              <th style="padding:8px;">Name</th>
+              <th style="padding:8px;">Price</th>
+              <th style="padding:8px;">Description</th>
+              <th style="padding:8px;"></th>
+            </tr>
+          </thead>
+          <tbody id="product-rows"></tbody>
+        </table>
+
+        <h4 style="margin-top:20px;">Add product</h4>
+        <div class="row">
+          <div class="col"><label>Name</label><input id="p-name" type="text" /></div>
+          <div class="col"><label>Price</label><input id="p-price" type="text" placeholder="e.g. 1200 BDT" /></div>
+        </div>
+        <label>Description</label>
+        <textarea id="p-desc" placeholder="Specs, sizes, colors, stock, anything customers ask about"></textarea>
+        <div style="margin-top:12px;">
+          <button class="btn" onclick="addProduct()">Add Product</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDERS TAB -->
+    <div class="tab" id="tab-orders">
+      <div class="card">
+        <h3>Orders</h3>
+        <p style="color:#6b7280; font-size:13px;">Orders the AI confirms with customers (or you set manually) show up here. Payments recorded from a customer's typed transaction ID or a payment screenshot are matched automatically.</p>
+        <table class="pay-table" id="orders-table">
+          <thead><tr><th>Items</th><th>Total</th><th>Customer</th><th>Trx ID</th><th>Status</th><th>Placed</th></tr></thead>
+          <tbody id="order-rows"></tbody>
+        </table>
+        <div id="orders-empty" class="empty" style="display:none; color:#9ca3af; font-size:13px; padding:16px;">No orders yet.</div>
+      </div>
+    </div>
+
+    <!-- CONVERSATIONS TAB -->
+    <div class="tab" id="tab-conversations">
+      <div class="card">
+        <h3>Conversations</h3>
+        <ul class="conv-list" id="conv-list"></ul>
+        <div id="thread-box" style="display:none;">
+          <div class="toggle-row">
+            <input type="checkbox" id="conv-ai-toggle" onchange="toggleConvAI()" />
+            <span>AI auto-reply enabled for this conversation</span>
+          </div>
+          <div class="msg-thread" id="msg-thread"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BILLING TAB -->
+    <div class="tab" id="tab-billing">
+      <div class="card">
+        <h3>Subscription</h3>
+        <p id="billing-status-line"></p>
+
+        <h4 style="margin-top:20px;">Renew / Pay</h4>
+        <p id="billing-instructions"></p>
+        <label>bKash Transaction ID</label>
+        <input id="billing-trxid" type="text" placeholder="e.g. 8N7A6B5C4D" />
+        <div style="margin-top:12px;">
+          <button class="btn" onclick="submitPayment()">Submit Payment</button>
+          <span class="save-msg" id="billing-save-msg"></span>
+        </div>
+
+        <h4 style="margin-top:24px;">Payment history</h4>
+        <table class="pay-table">
+          <thead><tr><th>Trx ID</th><th>Amount</th><th>Status</th><th>Submitted</th></tr></thead>
+          <tbody id="payment-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+let currentConvId = null;
+const socket = io();
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts
+  });
+  if (res.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  return res.json();
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+async function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  await refreshSessionBanner();
+  loadDashboard();
+  loadSettings();
+  loadConversations();
+  loadProducts();
+  loadOrders();
+  refreshWaStatus();
+  loadBilling();
+}
+
+async function refreshSessionBanner() {
+  const s = await api('/api/session');
+  if (!s.loggedIn) { showLogin(); return; }
+  document.getElementById('header-business-name').textContent = s.business_name;
+  document.getElementById('impersonation-banner').style.display = s.impersonating ? 'flex' : 'none';
+  const banner = document.getElementById('status-banner');
+  if (s.suspended) {
+    banner.className = 'expired';
+    banner.textContent = 'Your account has been suspended. Contact support.';
+  } else if (!s.active) {
+    banner.className = 'expired';
+    banner.textContent = 'Your trial/subscription has expired — your bot has stopped auto-replying. Renew in the Billing tab.';
+  } else if (s.subscription_ends_at === null) {
+    const daysLeft = Math.ceil((new Date(s.trial_ends_at) - new Date()) / 86400000);
+    banner.className = 'trial';
+    banner.textContent = 'Free trial — ' + daysLeft + ' day(s) left.';
+  } else {
+    banner.className = 'active';
+  }
+}
+
+async function exitImpersonation() {
+  await fetch('/api/superadmin/exit-impersonation', { method: 'POST' });
+  window.location.href = '/superadmin';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-pass').value;
+  const res = await fetch('/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  if (res.ok) { showApp(); } else {
+    const data = await res.json().catch(() => ({}));
+    document.getElementById('login-error').textContent = data.error || 'Invalid email or password';
+  }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  showLogin();
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelector('.tab-btn[data-tab="' + name + '"]').classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+}
+
+async function loadDashboard() {
+  const d = await api('/api/dashboard');
+  document.getElementById('stat-total-replies').textContent = d.total_ai_replies;
+  document.getElementById('stat-replies-today').textContent = d.ai_replies_today;
+  document.getElementById('stat-total-conversations').textContent = d.total_conversations;
+  document.getElementById('stat-fb-conversations').textContent = d.conversations_by_platform.facebook || 0;
+  document.getElementById('stat-wa-conversations').textContent = d.conversations_by_platform.whatsapp || 0;
+  document.getElementById('stat-orders-total').textContent = d.total_orders;
+  document.getElementById('stat-orders-confirmed').textContent = d.orders_by_status.confirmed || 0;
+  document.getElementById('stat-orders-paid').textContent = d.orders_by_status.paid || 0;
+  document.getElementById('stat-orders-cancelled').textContent = d.orders_by_status.cancelled || 0;
+}
+
+async function loadSettings() {
+  const s = await api('/api/settings');
+  document.getElementById('openai_model').value = s.openai_model || 'gpt-4o-mini';
+  document.getElementById('gemini_model').value = s.gemini_model || 'gemini-3.5-flash';
+  document.getElementById('system_prompt').value = s.system_prompt || '';
+  document.getElementById('order_tools_enabled').checked = s.order_tools_enabled !== 'false';
+  document.getElementById('fb_enabled').checked = s.fb_enabled === 'true';
+  document.getElementById('fb_page_id').value = s.fb_page_id || '';
+  document.getElementById('fb_page_access_token').value = s.fb_page_access_token || '';
+  document.getElementById('whatsapp_enabled').checked = s.whatsapp_enabled === 'true';
+  document.getElementById('key-masked').textContent = s.openai_api_key_masked ? '(currently: ' + s.openai_api_key_masked + ')' : '(not set)';
+  document.getElementById('gemini-key-masked').textContent = s.gemini_api_key_masked ? '(currently: ' + s.gemini_api_key_masked + ')' : '(not set)';
+
+  const provider = s.ai_provider || 'openai';
+  document.getElementById('ai-provider-openai').checked = provider === 'openai';
+  document.getElementById('ai-provider-gemini').checked = provider === 'gemini';
+  onAiProviderChange();
+
+  const mode = s.whatsapp_mode || 'qr';
+  document.getElementById('wa-mode-qr').checked = mode === 'qr';
+  document.getElementById('wa-mode-cloud').checked = mode === 'cloud_api';
+  document.getElementById('wa_cloud_phone_number_id').value = s.wa_cloud_phone_number_id || '';
+  document.getElementById('wa_cloud_access_token').value = s.wa_cloud_access_token || '';
+  onWaModeChange();
+}
+
+function onAiProviderChange() {
+  const gemini = document.getElementById('ai-provider-gemini').checked;
+  document.getElementById('openai-panel').style.display = gemini ? 'none' : 'block';
+  document.getElementById('gemini-panel').style.display = gemini ? 'block' : 'none';
+}
+
+function onWaModeChange() {
+  const cloud = document.getElementById('wa-mode-cloud').checked;
+  document.getElementById('wa-qr-panel').style.display = cloud ? 'none' : 'block';
+  document.getElementById('wa-cloud-panel').style.display = cloud ? 'block' : 'none';
+}
+
+async function saveSettings() {
+  const body = {
+    ai_provider: document.getElementById('ai-provider-gemini').checked ? 'gemini' : 'openai',
+    openai_api_key: document.getElementById('openai_api_key').value,
+    openai_model: document.getElementById('openai_model').value,
+    gemini_api_key: document.getElementById('gemini_api_key').value,
+    gemini_model: document.getElementById('gemini_model').value,
+    system_prompt: document.getElementById('system_prompt').value,
+    order_tools_enabled: document.getElementById('order_tools_enabled').checked ? 'true' : 'false',
+    fb_enabled: document.getElementById('fb_enabled').checked ? 'true' : 'false',
+    fb_page_id: document.getElementById('fb_page_id').value,
+    fb_page_access_token: document.getElementById('fb_page_access_token').value,
+    whatsapp_enabled: document.getElementById('whatsapp_enabled').checked ? 'true' : 'false',
+    whatsapp_mode: document.getElementById('wa-mode-cloud').checked ? 'cloud_api' : 'qr',
+    wa_cloud_phone_number_id: document.getElementById('wa_cloud_phone_number_id').value,
+    wa_cloud_access_token: document.getElementById('wa_cloud_access_token').value
+  };
+  await api('/api/settings', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('openai_api_key').value = '';
+  document.getElementById('gemini_api_key').value = '';
+  const msg = document.getElementById('save-msg');
+  msg.textContent = 'Saved ✓';
+  loadSettings();
+  setTimeout(() => msg.textContent = '', 2000);
+}
+
+async function refreshWaStatus() {
+  const { status } = await api('/api/whatsapp/status');
+  setWaBadge(status);
+}
+function setWaBadge(status) {
+  const badge = document.getElementById('wa-badge');
+  badge.textContent = status;
+  badge.className = 'badge ' + status;
+  if (status === 'connected') {
+    document.getElementById('qr-box').innerHTML = '';
+    document.getElementById('wa-instructions').textContent = 'Connected. WhatsApp will auto-reply to incoming chats.';
+  }
+}
+socket.on('wa-qr', (dataUrl) => {
+  document.getElementById('qr-box').innerHTML = '<img src="' + dataUrl + '" />';
+  setWaBadge('qr');
+});
+socket.on('wa-status', (status) => setWaBadge(status));
+
+async function connectWhatsapp() {
+  const res = await fetch('/api/whatsapp/connect', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'Could not connect'); return; }
+  document.getElementById('wa-instructions').textContent = 'Starting up... QR code will appear shortly.';
+}
+
+async function resetWhatsapp() {
+  await api('/api/whatsapp/reset', { method: 'POST' });
+  setWaBadge('disconnected');
+}
+
+async function loadConversations() {
+  const list = await api('/api/conversations');
+  const ul = document.getElementById('conv-list');
+  ul.innerHTML = '';
+  list.forEach(c => {
+    const li = document.createElement('li');
+    li.innerHTML = '<span><strong>' + escapeHtml(c.contact_name || c.contact_id) + '</strong> — ' + c.platform + '</span>' +
+      '<span style="color:#6b7280;font-size:12px;">' + new Date(c.last_message_at).toLocaleString() + '</span>';
+    li.onclick = () => openConversation(c.id, c.ai_enabled);
+    ul.appendChild(li);
+  });
+}
+
+async function openConversation(id, aiEnabled) {
+  currentConvId = id;
+  document.getElementById('thread-box').style.display = 'block';
+  document.getElementById('conv-ai-toggle').checked = aiEnabled;
+  const msgs = await api('/api/conversations/' + id + '/messages');
+  const box = document.getElementById('msg-thread');
+  box.innerHTML = '';
+  msgs.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'msg ' + m.direction;
+    div.textContent = m.content;
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+async function toggleConvAI() {
+  if (!currentConvId) return;
+  const enabled = document.getElementById('conv-ai-toggle').checked;
+  await api('/api/conversations/' + currentConvId + '/toggle-ai', {
+    method: 'POST', body: JSON.stringify({ enabled })
+  });
+}
+
+async function loadProducts() {
+  const products = await api('/api/products');
+  const tbody = document.getElementById('product-rows');
+  tbody.innerHTML = '';
+  products.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #f1f5f9';
+    tr.innerHTML =
+      '<td style="padding:8px;">' + escapeHtml(p.name) + '</td>' +
+      '<td style="padding:8px;">' + escapeHtml(p.price || '') + '</td>' +
+      '<td style="padding:8px; color:#4b5563;">' + escapeHtml(p.description || '') + '</td>' +
+      '<td style="padding:8px;"><button class="btn danger" style="padding:4px 10px;" onclick="deleteProduct(' + p.id + ')">Delete</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function addProduct() {
+  const name = document.getElementById('p-name').value.trim();
+  const price = document.getElementById('p-price').value.trim();
+  const description = document.getElementById('p-desc').value.trim();
+  if (!name) return;
+  await api('/api/products', { method: 'POST', body: JSON.stringify({ name, price, description }) });
+  document.getElementById('p-name').value = '';
+  document.getElementById('p-price').value = '';
+  document.getElementById('p-desc').value = '';
+  loadProducts();
+}
+
+async function deleteProduct(id) {
+  await api('/api/products/' + id, { method: 'DELETE' });
+  loadProducts();
+}
+
+async function loadOrders() {
+  const orders = await api('/api/orders');
+  const tbody = document.getElementById('order-rows');
+  tbody.innerHTML = '';
+  document.getElementById('orders-empty').style.display = orders.length ? 'none' : 'block';
+  orders.forEach(o => {
+    const itemsText = (o.items || []).map(i => (i.quantity ? i.quantity + 'x ' : '') + i.name).join(', ');
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapeHtml(itemsText || '—') + '</td>' +
+      '<td>' + escapeHtml(o.total_amount || '') + '</td>' +
+      '<td>' + escapeHtml(o.customer_name || '') + '</td>' +
+      '<td>' + escapeHtml(o.payment_trx_id || '') + '</td>' +
+      '<td><select onchange="updateOrderStatus(' + o.id + ', this.value)">' +
+        ['confirmed','paid','cancelled'].map(s => '<option value="' + s + '"' + (s === o.status ? ' selected' : '') + '>' + s + '</option>').join('') +
+      '</select></td>' +
+      '<td>' + new Date(o.created_at).toLocaleString() + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+async function updateOrderStatus(id, status) {
+  await api('/api/orders/' + id + '/status', { method: 'POST', body: JSON.stringify({ status }) });
+  loadOrders();
+}
+
+async function loadBilling() {
+  const b = await api('/api/billing');
+  const line = document.getElementById('billing-status-line');
+  if (b.suspended) {
+    line.textContent = 'Your account is suspended.';
+  } else if (b.active && b.subscription_ends_at) {
+    line.textContent = 'Active — paid through ' + new Date(b.subscription_ends_at).toLocaleDateString() + '.';
+  } else if (b.active) {
+    line.textContent = 'Free trial — ends ' + new Date(b.trial_ends_at).toLocaleDateString() + '.';
+  } else {
+    line.textContent = 'Expired. Renew below to resume auto-replies.';
+  }
+  document.getElementById('billing-instructions').textContent =
+    'Send ' + b.price_bdt + ' BDT via bKash ' + b.bkash_type + ' to ' + b.bkash_number +
+    ', then enter the Transaction ID below. We will activate your account once confirmed (usually within a few hours).';
+
+  const tbody = document.getElementById('payment-rows');
+  tbody.innerHTML = '';
+  b.payments.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapeHtml(p.trx_id) + '</td>' +
+      '<td>' + escapeHtml(p.amount || '') + '</td>' +
+      '<td><span class="status-pill ' + p.status + '">' + p.status + '</span></td>' +
+      '<td>' + new Date(p.submitted_at).toLocaleString() + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+async function submitPayment() {
+  const trx_id = document.getElementById('billing-trxid').value.trim();
+  if (!trx_id) return;
+  await api('/api/billing/submit', { method: 'POST', body: JSON.stringify({ trx_id }) });
+  document.getElementById('billing-trxid').value = '';
+  const msg = document.getElementById('billing-save-msg');
+  msg.textContent = 'Submitted — pending approval ✓';
+  loadBilling();
+  setTimeout(() => msg.textContent = '', 3000);
+}
+
+// check session on load
+api('/api/session').then(s => { if (s.loggedIn) showApp(); else showLogin(); });
+</script>
+</body>
+</html>
