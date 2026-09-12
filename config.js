@@ -8,8 +8,10 @@
 // ============================================================
 
 module.exports = {
-  // Web server
-  PORT: 3000,
+  // Web server. Coolify assigns and injects PORT automatically at
+  // runtime — this falls back to 3000 only when running outside Coolify
+  // (e.g. plain VPS, or locally).
+  PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
 
   // Session secret — change this to a long random string
   SESSION_SECRET: 'change-this-to-a-long-random-string',
