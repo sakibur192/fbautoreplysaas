@@ -21,13 +21,13 @@ module.exports = {
   // PostgreSQL connection — use the host/port/user/password/database
   // Coolify's Postgres resource gives you (Coolify → your Postgres
   // resource → Connection Details).
-DB: {
-  host: '76.13.223.236',
-  port: 5466,
-  user: 'postgres',
-  password: 'LaYpTAhiYayycvCiHA9PvZnr5yfFObOoh4T4SK52oM9Gtn4WbP6ORT8a388kYr0h',
-  database: 'postgres'
-},
+  DB: {
+    host: '76.13.223.236',
+    port: 5466,
+    user: 'postgres',
+    password: 'LaYpTAhiYayycvCiHA9PvZnr5yfFObOoh4T4SK52oM9Gtn4WbP6ORT8a388kYr0h',
+    database: 'postgres'
+  },
 
   // ---- Facebook: ONE Meta App/webhook serves every tenant's Page ----
   // Set this in your Meta App's webhook config. Each tenant only
