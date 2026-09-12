@@ -1,5 +1,6 @@
 // ============================================================
-// Hardcoded configuration. Edit these values directly.
+// Hardcoded configuration. Edit these values directly before
+// deploying — no .env file, no environment variables.
 // Per-tenant stuff (their AI key, prompt, FB tokens, products)
 // lives in the DATABASE and is edited from each tenant's own
 // admin panel. This file only holds platform-level, deploy-time
@@ -14,10 +15,12 @@ module.exports = {
   SESSION_SECRET: 'change-this-to-a-long-random-string',
 
   // ---- YOUR (super admin) login — manages all tenants/payments ----
-  SUPERADMIN_USERNAME: 'sakibur521@gmail.com',
-  SUPERADMIN_PASSWORD: '123456',
+  SUPERADMIN_USERNAME: 'admin',
+  SUPERADMIN_PASSWORD: 'change-this-password',
 
-  // PostgreSQL connection
+  // PostgreSQL connection — use the host/port/user/password/database
+  // Coolify's Postgres resource gives you (Coolify → your Postgres
+  // resource → Connection Details).
 DB: {
   host: '76.13.223.236',
   port: 5466,
@@ -38,14 +41,12 @@ DB: {
   TRIAL_DAYS: 3,
   SUBSCRIPTION_DAYS: 30,
   BKASH_RECEIVE_NUMBER: '01XXXXXXXXX', // the number customers send payment to
-  BKASH_TYPE: 'Paymeny', // or "Payment" if it's a merchant/agent number
+  BKASH_TYPE: 'Send Money', // or "Payment" if it's a merchant/agent number
 
   // How many previous messages to feed the AI as context
   AI_HISTORY_LIMIT: 10,
 
   // ---- Anti-ban pacing (see README "Staying safe" section) ----
-  // Random delay range (ms) before sending an auto-reply, to avoid
-  // instant-bot-like replies.
   REPLY_DELAY_MIN_MS: 1500,
   REPLY_DELAY_MAX_MS: 4500
 };

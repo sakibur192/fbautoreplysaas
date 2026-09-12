@@ -5,6 +5,8 @@ trial, connect their own Facebook Page and WhatsApp number, and pay you
 1,000 BDT/month by bKash to keep it running. You manage everyone from one
 super admin panel.
 
+**Deploying on Coolify?** See [`DEPLOY_COOLIFY.md`](./DEPLOY_COOLIFY.md) instead of the manual VPS steps below — no Dockerfile or env vars needed, Coolify auto-builds this with Nixpacks and you edit `config.js` directly, same as the manual setup.
+
 ## Three separate panels
 - **`/`** — public landing page: pricing, "Start free trial" signup form
 - **`/admin`** — each tenant's own panel (login with the email/password they signed up with): dashboard summary, settings, WhatsApp QR, products, orders, conversations, billing
