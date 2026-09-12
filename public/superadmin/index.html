@@ -45,6 +45,21 @@
     <button class="secondary" onclick="doLogout()">Log out</button>
   </header>
   <main>
+    <h2>Platform AI (fallback) &amp; trial settings</h2>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Used automatically for any tenant who hasn't set their own AI key — they won't know the difference, replies just work.</p>
+      <label>OpenAI API Key <span id="platform-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+      <input id="platform_openai_api_key" type="text" placeholder="sk-..." />
+      <label>Model</label>
+      <input id="platform_openai_model" type="text" placeholder="gpt-4o-mini" />
+      <label>Default trial length for new signups (days)</label>
+      <input id="default_trial_days" type="text" placeholder="3" />
+      <div style="margin-top:12px;">
+        <button onclick="savePlatformSettings()">Save</button>
+        <span id="platform-save-msg" style="color:#166534; font-size:13px; margin-left:8px;"></span>
+      </div>
+    </div>
+
     <h2>Pending payments</h2>
     <table>
       <thead><tr><th>Business</th><th>Email</th><th>Trx ID</th><th>Amount</th><th>Submitted</th><th></th></tr></thead>
@@ -54,7 +69,7 @@
 
     <h2>Tenants</h2>
     <table>
-      <thead><tr><th>Business</th><th>Email</th><th>Status</th><th>Trial ends</th><th>Subscription ends</th><th></th></tr></thead>
+      <thead><tr><th>Business</th><th>Email</th><th>Status</th><th>Trial ends</th><th>Subscription ends</th><th></th><th>Extend</th></tr></thead>
       <tbody id="tenant-rows"></tbody>
     </table>
   </main>
@@ -73,6 +88,7 @@ function showLogin() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  loadPlatformSettings();
   loadPayments();
   loadTenants();
 }
@@ -95,6 +111,27 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str || '';
   return div.innerHTML;
+}
+
+async function loadPlatformSettings() {
+  const s = await api('/api/superadmin/platform-settings');
+  document.getElementById('platform_openai_model').value = s.platform_openai_model || '';
+  document.getElementById('default_trial_days').value = s.default_trial_days || '';
+  document.getElementById('platform-key-masked').textContent = s.platform_openai_api_key_masked ? '(currently: ' + s.platform_openai_api_key_masked + ')' : '(not set)';
+}
+
+async function savePlatformSettings() {
+  const body = {
+    platform_openai_api_key: document.getElementById('platform_openai_api_key').value,
+    platform_openai_model: document.getElementById('platform_openai_model').value,
+    default_trial_days: document.getElementById('default_trial_days').value
+  };
+  await api('/api/superadmin/platform-settings', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('platform_openai_api_key').value = '';
+  const msg = document.getElementById('platform-save-msg');
+  msg.textContent = 'Saved ✓';
+  loadPlatformSettings();
+  setTimeout(() => msg.textContent = '', 2000);
 }
 
 async function loadPayments() {
@@ -139,9 +176,20 @@ async function loadTenants() {
       '<td>' + (t.subscription_ends_at ? new Date(t.subscription_ends_at).toLocaleDateString() : '—') + '</td>' +
       '<td><button class="secondary" onclick="impersonate(' + t.id + ')">Log in as</button> ' +
       '<button class="' + (t.suspended ? 'success' : 'danger') + '" onclick="toggleSuspend(' + t.id + ',' + (!t.suspended) + ')">' +
-      (t.suspended ? 'Unsuspend' : 'Suspend') + '</button></td>';
+      (t.suspended ? 'Unsuspend' : 'Suspend') + '</button></td>' +
+      '<td><input type="number" min="1" placeholder="days" style="width:60px;" id="extend-days-' + t.id + '" />' +
+      '<button onclick="extendTenant(' + t.id + ')">Extend</button></td>';
     tbody.appendChild(tr);
   });
+}
+
+async function extendTenant(id) {
+  const input = document.getElementById('extend-days-' + id);
+  const days = parseInt(input.value, 10);
+  if (!days || days <= 0) return;
+  await api('/api/superadmin/tenants/' + id + '/extend', { method: 'POST', body: JSON.stringify({ days }) });
+  input.value = '';
+  loadTenants();
 }
 
 async function impersonate(id) {

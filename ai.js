@@ -224,14 +224,20 @@ async function generateGeminiReply(tenantId, conversationId, settings, priorHist
  */
 async function generateReply(tenantId, conversationId, latestUserMessage, imageData = null) {
   const settings = await db.getSettings(tenantId);
-  const provider = settings.ai_provider || 'openai';
+  let provider = settings.ai_provider || 'openai';
   const useTools = settings.order_tools_enabled !== 'false';
 
-  if (provider === 'gemini' && !settings.gemini_api_key) {
-    throw new Error('Gemini API key is not set. Add it in the admin panel Settings tab.');
-  }
-  if (provider === 'openai' && !settings.openai_api_key) {
-    throw new Error('OpenAI API key is not set. Add it in the admin panel Settings tab.');
+  const tenantHasKey = provider === 'gemini' ? !!settings.gemini_api_key : !!settings.openai_api_key;
+
+  if (!tenantHasKey) {
+    // Fall back to the super admin's platform-wide OpenAI key, if set.
+    const platformSettings = await db.getPlatformSettings();
+    if (!platformSettings.platform_openai_api_key) {
+      throw new Error('No AI configured — neither the tenant nor the platform has an API key set.');
+    }
+    provider = 'openai';
+    settings.openai_api_key = platformSettings.platform_openai_api_key;
+    settings.openai_model = platformSettings.platform_openai_model || 'gpt-4o-mini';
   }
 
   const history = await db.getRecentMessages(conversationId, config.AI_HISTORY_LIMIT);

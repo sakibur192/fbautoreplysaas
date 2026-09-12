@@ -56,7 +56,9 @@ app.post('/api/register', async (req, res) => {
     if (existing) return res.status(400).json({ error: 'An account with this email already exists' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const tenant = await db.createTenant(business_name.trim(), email.toLowerCase().trim(), passwordHash);
+    const platformSettings = await db.getPlatformSettings();
+    const trialDays = parseInt(platformSettings.default_trial_days, 10) || config.TRIAL_DAYS;
+    const tenant = await db.createTenant(business_name.trim(), email.toLowerCase().trim(), passwordHash, trialDays);
     req.session.tenantId = tenant.id;
     res.json({ ok: true });
   } catch (err) {
@@ -142,6 +144,7 @@ app.post('/api/settings', requireTenant, async (req, res) => {
     'gemini_model',
     'system_prompt',
     'order_tools_enabled',
+    'fallback_message',
     'fb_page_id',
     'fb_page_access_token',
     'fb_enabled',
@@ -246,6 +249,36 @@ app.post('/api/superadmin/logout', (req, res) => {
 });
 app.get('/api/superadmin/session', (req, res) => {
   res.json({ loggedIn: !!(req.session && req.session.isSuperAdmin) });
+});
+
+// Platform-wide AI fallback + default trial length — set by you, used
+// automatically for any tenant who hasn't configured their own AI key.
+app.get('/api/superadmin/platform-settings', requireSuperAdmin, async (req, res) => {
+  const settings = await db.getPlatformSettings();
+  if (settings.platform_openai_api_key) {
+    settings.platform_openai_api_key_masked = maskKey(settings.platform_openai_api_key);
+  }
+  delete settings.platform_openai_api_key;
+  res.json(settings);
+});
+
+app.post('/api/superadmin/platform-settings', requireSuperAdmin, async (req, res) => {
+  const allowed = ['platform_openai_api_key', 'platform_openai_model', 'default_trial_days'];
+  const update = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined && req.body[key] !== '') update[key] = req.body[key];
+  }
+  await db.updatePlatformSettings(update);
+  res.json({ ok: true });
+});
+
+// Grant a tenant extra days directly — independent of the payment queue,
+// for comps, goodwill extensions, manual overrides, etc.
+app.post('/api/superadmin/tenants/:id/extend', requireSuperAdmin, async (req, res) => {
+  const days = parseInt(req.body.days, 10);
+  if (!days || days <= 0) return res.status(400).json({ error: 'Provide a positive number of days' });
+  const newEnd = await db.extendSubscription(req.params.id, days);
+  res.json({ ok: true, subscription_ends_at: newEnd });
 });
 
 app.get('/api/superadmin/tenants', requireSuperAdmin, async (req, res) => {

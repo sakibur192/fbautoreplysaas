@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS settings (
   PRIMARY KEY (tenant_id, key)
 );
 
+-- Platform-wide settings (no tenant_id) — set by YOU, the super admin.
+-- Currently used for the fallback AI key tenants fall back to if they
+-- haven't set their own, and the default trial length for new signups.
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
   id SERIAL PRIMARY KEY,
   tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
@@ -94,6 +102,7 @@ const DEFAULT_SETTINGS = {
   gemini_model: 'gemini-3.5-flash',
   system_prompt: 'You are a helpful, friendly customer support assistant. Keep replies short and clear.',
   order_tools_enabled: 'true',
+  fallback_message: "Sorry for the delay — I've passed this along to our team and someone will get back to you shortly!",
   fb_page_id: '',
   fb_page_access_token: '',
   fb_enabled: 'false',
@@ -103,13 +112,44 @@ const DEFAULT_SETTINGS = {
   wa_cloud_access_token: ''
 };
 
+const DEFAULT_PLATFORM_SETTINGS = {
+  platform_openai_api_key: '', // fallback AI used when a tenant hasn't set their own
+  platform_openai_model: 'gpt-4o-mini',
+  default_trial_days: '3'
+};
+
 async function init() {
   await pool.query(SCHEMA);
+  for (const [key, value] of Object.entries(DEFAULT_PLATFORM_SETTINGS)) {
+    await pool.query(
+      `INSERT INTO platform_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+      [key, value]
+    );
+  }
+}
+
+// ---------- platform settings (super admin only) ----------
+async function getPlatformSettings() {
+  const { rows } = await pool.query('SELECT key, value FROM platform_settings');
+  const out = { ...DEFAULT_PLATFORM_SETTINGS };
+  for (const row of rows) out[row.key] = row.value;
+  return out;
+}
+
+async function updatePlatformSettings(obj) {
+  for (const [key, value] of Object.entries(obj)) {
+    await pool.query(
+      `INSERT INTO platform_settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [key, String(value)]
+    );
+  }
 }
 
 // ---------- tenants ----------
-async function createTenant(businessName, email, passwordHash) {
-  const trialEndsAt = new Date(Date.now() + config.TRIAL_DAYS * 24 * 60 * 60 * 1000);
+async function createTenant(businessName, email, passwordHash, trialDays) {
+  const days = trialDays !== undefined && trialDays !== null ? trialDays : config.TRIAL_DAYS;
+  const trialEndsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   const { rows } = await pool.query(
     `INSERT INTO tenants (business_name, email, password_hash, trial_ends_at)
      VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -205,7 +245,10 @@ async function decidePayment(id, status) {
 // ---------- settings (per tenant) ----------
 async function getSettings(tenantId) {
   const { rows } = await pool.query('SELECT key, value FROM settings WHERE tenant_id = $1', [tenantId]);
-  const out = {};
+  // Merge over DEFAULT_SETTINGS so a tenant created before some setting
+  // existed (this list has grown over time) still gets a sane default
+  // for it, instead of undefined breaking whatever reads it.
+  const out = { ...DEFAULT_SETTINGS };
   for (const row of rows) out[row.key] = row.value;
   return out;
 }
@@ -436,6 +479,8 @@ async function deleteProduct(tenantId, id) {
 module.exports = {
   pool,
   init,
+  getPlatformSettings,
+  updatePlatformSettings,
   createTenant,
   getTenantByEmail,
   getTenantById,

@@ -67,6 +67,17 @@ You only create **one** Meta App, ever:
 
 Tenants choose their WhatsApp method per-account in the **WhatsApp** tab. Both can't run at once for the same tenant — whichever mode they pick is the only one that replies.
 
+## Platform AI fallback, trial defaults, and manual extensions
+Three things live in the super admin panel now, not per-tenant:
+- **Fallback AI key** — set your own OpenAI key/model once in `/superadmin`. Any tenant who hasn't set their own AI key uses yours automatically and transparently — they never see an error, replies just work. A tenant's own key always takes priority the moment they set one.
+- **Default trial length** — change how many free days *new* signups get, without touching `config.js` or redeploying.
+- **Extend by X days** — a per-tenant control in the Tenants table for manually granting extra time (comps, goodwill, fixing a payment mix-up) — separate from the bKash approval flow, stacks on top of whatever time they already have left.
+
+## When the AI genuinely can't reply
+If an AI call fails for any reason — no key configured anywhere, an invalid key, a rate limit, a provider outage — the customer still gets a real reply instead of silence: the tenant's **fallback message** (Settings tab, editable, defaults to *"Sorry for the delay — I've passed this along to our team and someone will get back to you shortly!"*). It's sent through the same channel the customer messaged on, logged in the conversation so the tenant can see it happened, and tagged separately from AI replies so it doesn't skew the Dashboard's reply-count stats.
+
+Note: `db.getSettings()` always merges in sensible defaults for any setting a tenant's row doesn't have yet — this matters because the list of settings has grown over time, so a tenant created before a given field existed (e.g. `fallback_message`) would otherwise get `undefined` for it instead of the default, which broke the fallback reply itself in an early version of this feature. Fixed now, but worth knowing if you ever add a new per-tenant setting: always add it to `DEFAULT_SETTINGS` in `db.js` rather than assuming existing tenants will have it.
+
 ## Dashboard tab
 The first thing a tenant sees when they log in: total AI replies sent, replies sent today, conversation counts split by Facebook/WhatsApp, and order counts by status (awaiting payment / paid / cancelled). All computed live from the same `messages`, `conversations`, and `orders` tables — nothing separate to keep in sync.
 

@@ -180,6 +180,9 @@
           <span>Let the AI confirm orders and record payments automatically</span>
         </div>
 
+        <label style="margin-top:14px;">Fallback message (sent if the AI is ever unavailable)</label>
+        <input id="fallback_message" type="text" placeholder="Sorry for the delay — someone from our team will get back to you shortly!" />
+
         <h3 style="margin-top:24px;">Facebook Page</h3>
         <div class="toggle-row">
           <input type="checkbox" id="fb_enabled" />
@@ -423,6 +426,7 @@ async function loadSettings() {
   document.getElementById('gemini_model').value = s.gemini_model || 'gemini-3.5-flash';
   document.getElementById('system_prompt').value = s.system_prompt || '';
   document.getElementById('order_tools_enabled').checked = s.order_tools_enabled !== 'false';
+  document.getElementById('fallback_message').value = s.fallback_message || '';
   document.getElementById('fb_enabled').checked = s.fb_enabled === 'true';
   document.getElementById('fb_page_id').value = s.fb_page_id || '';
   document.getElementById('fb_page_access_token').value = s.fb_page_access_token || '';
@@ -464,6 +468,7 @@ async function saveSettings() {
     gemini_model: document.getElementById('gemini_model').value,
     system_prompt: document.getElementById('system_prompt').value,
     order_tools_enabled: document.getElementById('order_tools_enabled').checked ? 'true' : 'false',
+    fallback_message: document.getElementById('fallback_message').value,
     fb_enabled: document.getElementById('fb_enabled').checked ? 'true' : 'false',
     fb_page_id: document.getElementById('fb_page_id').value,
     fb_page_access_token: document.getElementById('fb_page_access_token').value,

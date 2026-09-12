@@ -91,18 +91,29 @@ function connectTenant(tenantId, io) {
       await db.addMessage(conversation.id, 'in', 'user', text || '[Image]');
       if (!conversation.ai_enabled) return;
 
-      const reply = await ai.generateReply(tenantId, conversation.id, text, imageData);
-
-      // Anti-ban pacing: show a typing indicator and wait a human-like
-      // amount of time before sending, instead of replying instantly.
       try {
-        const chat = await msg.getChat();
-        await chat.sendStateTyping();
-      } catch (e) { /* non-fatal if typing indicator fails */ }
-      await humanDelay();
+        const reply = await ai.generateReply(tenantId, conversation.id, text, imageData);
 
-      await msg.reply(reply);
-      await db.addMessage(conversation.id, 'out', 'ai', reply);
+        // Anti-ban pacing: show a typing indicator and wait a human-like
+        // amount of time before sending, instead of replying instantly.
+        try {
+          const chat = await msg.getChat();
+          await chat.sendStateTyping();
+        } catch (e) { /* non-fatal if typing indicator fails */ }
+        await humanDelay();
+
+        await msg.reply(reply);
+        await db.addMessage(conversation.id, 'out', 'ai', reply);
+      } catch (err) {
+        console.error(`[whatsapp] tenant ${tenantId} AI reply failed:`, err.message);
+        try {
+          await humanDelay();
+          await msg.reply(settings.fallback_message);
+          await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+        } catch (err2) {
+          console.error(`[whatsapp] tenant ${tenantId} fallback reply also failed:`, err2.message);
+        }
+      }
     } catch (err) {
       console.error(`[whatsapp] tenant ${tenantId} message handling failed:`, err.message);
     }

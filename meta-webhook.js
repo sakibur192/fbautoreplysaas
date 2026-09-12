@@ -79,6 +79,13 @@ async function handleFacebookEntries(entries) {
         await db.addMessage(conversation.id, 'out', 'ai', reply);
       } catch (err) {
         console.error(`[facebook] tenant ${tenantId} AI reply failed:`, err.message);
+        try {
+          await humanDelay();
+          await sendFacebookMessage(settings.fb_page_access_token, senderId, settings.fallback_message);
+          await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+        } catch (err2) {
+          console.error(`[facebook] tenant ${tenantId} fallback reply also failed:`, err2.message);
+        }
       }
     }
   }
@@ -145,6 +152,13 @@ async function handleWhatsappCloudEntries(entries) {
           await db.addMessage(conversation.id, 'out', 'ai', reply);
         } catch (err) {
           console.error(`[whatsapp-cloud] tenant ${tenantId} AI reply failed:`, err.message);
+          try {
+            await humanDelay();
+            await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, settings.wa_cloud_access_token, from, settings.fallback_message);
+            await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+          } catch (err2) {
+            console.error(`[whatsapp-cloud] tenant ${tenantId} fallback reply also failed:`, err2.message);
+          }
         }
       }
     }
