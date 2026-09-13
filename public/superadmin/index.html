@@ -15,7 +15,7 @@
   .btn.secondary { background: #64748b; }
   #app { display: none; }
   header { background: #111827; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
-  main { padding: 24px; max-width: 1000px; margin: 0 auto; }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
   h2 { font-size: 18px; margin: 30px 0 12px; }
   table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
@@ -25,6 +25,52 @@
   .badge.inactive { background: #fee2e2; color: #991b1b; }
   .badge.suspended { background: #f3f4f6; color: #6b7280; }
   .empty { color: #9ca3af; font-size: 13px; padding: 16px; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  label { display: block; margin-top: 12px; font-weight: 600; font-size: 13px; color: #374151; }
+  .row { display: flex; gap: 20px; }
+  .col { flex: 1; }
+  #ai-panel-openai, #ai-panel-gemini { margin-top: 12px; }
+  #ai-test-result { font-size: 13px; margin-left: 8px; }
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 50; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; padding: 24px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; margin-top: 12px; }
+  .modal dt { color: #6b7280; }
+  .modal dd { margin: 0; font-weight: 600; }
+</style>
+
+<style>
+  * { transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease; }
+  button, .btn { cursor: pointer; }
+  button:not(:disabled):active { transform: scale(0.97); }
+  button:not(.secondary):not(.danger):not(.success):hover { box-shadow: 0 4px 12px rgba(37,99,235,0.28); transform: translateY(-1px); }
+  .card { transition: box-shadow 0.2s ease; }
+  .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+  tr { transition: background-color 0.15s ease; }
+  tr:hover td { background: #f9fafb; }
+  input[type=text], input[type=password], input[type=number] {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+  .modal-backdrop { transition: opacity 0.2s ease; }
+  .modal-backdrop .modal { transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; transform: scale(0.94); opacity: 0; }
+  .modal-backdrop.open .modal { transform: scale(1); opacity: 1; }
+  #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2); opacity: 0; transform: translateY(8px) scale(0.98);
+    animation: toastIn 0.25s ease forwards;
+  }
+  .toast.success { background: #166534; }
+  .toast.error { background: #991b1b; }
+  .toast.leaving { animation: toastOut 0.2s ease forwards; }
+  @keyframes toastIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes toastOut { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+  .badge { transition: background-color 0.25s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    *, .toast, .modal-backdrop .modal { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -45,18 +91,59 @@
     <button class="secondary" onclick="doLogout()">Log out</button>
   </header>
   <main>
-    <h2>Platform AI (fallback) &amp; trial settings</h2>
+    <h2>Platform AI</h2>
     <div class="card">
-      <p style="color:#6b7280; font-size:13px; margin-top:0;">Used automatically for any tenant who hasn't set their own AI key — they won't know the difference, replies just work.</p>
-      <label>OpenAI API Key <span id="platform-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
-      <input id="platform_openai_api_key" type="text" placeholder="sk-..." />
-      <label>Model</label>
-      <input id="platform_openai_model" type="text" placeholder="gpt-4o-mini" />
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">The only place AI credentials live — every tenant's replies use whichever provider/key/model is set here.</p>
+
+      <div class="toggle-row">
+        <input type="radio" name="ai-provider" id="ai-provider-openai" value="openai" onchange="onAiProviderChange()" />
+        <span>OpenAI (ChatGPT)</span>
+      </div>
+      <div class="toggle-row">
+        <input type="radio" name="ai-provider" id="ai-provider-gemini" value="gemini" onchange="onAiProviderChange()" />
+        <span>Google Gemini</span>
+      </div>
+
+      <div id="ai-panel-openai">
+        <label>OpenAI API Key <span id="platform-openai-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+        <input id="platform_openai_api_key" type="text" placeholder="sk-..." style="width:100%;" />
+        <label>Model</label>
+        <input id="platform_openai_model" type="text" placeholder="gpt-4o-mini" style="width:100%;" />
+      </div>
+      <div id="ai-panel-gemini" style="display:none;">
+        <label>Gemini API Key <span id="platform-gemini-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+        <input id="platform_gemini_api_key" type="text" placeholder="AIza..." style="width:100%;" />
+        <label>Model</label>
+        <input id="platform_gemini_model" type="text" placeholder="gemini-3.5-flash" style="width:100%;" />
+      </div>
+
       <label>Default trial length for new signups (days)</label>
-      <input id="default_trial_days" type="text" placeholder="3" />
-      <div style="margin-top:12px;">
+      <input id="default_trial_days" type="text" placeholder="3" style="width:100%;" />
+
+      <div style="margin-top:14px;">
         <button onclick="savePlatformSettings()">Save</button>
         <span id="platform-save-msg" style="color:#166534; font-size:13px; margin-left:8px;"></span>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="secondary" onclick="testAiConnection()">Test AI Connection</button>
+        <span id="ai-test-result"></span>
+      </div>
+    </div>
+
+    <h2>Plans</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Reply limit / mo</th><th>Price (BDT)</th><th></th></tr></thead>
+        <tbody id="plan-rows"></tbody>
+      </table>
+      <h4 style="margin-top:20px;">Add plan</h4>
+      <div class="row">
+        <div class="col"><label>Name</label><input id="new-plan-name" type="text" placeholder="e.g. Starter" style="width:100%;" /></div>
+        <div class="col"><label>Reply limit / month</label><input id="new-plan-limit" type="number" placeholder="5000" style="width:100%;" /></div>
+        <div class="col"><label>Price (BDT / month)</label><input id="new-plan-price" type="number" placeholder="2000" style="width:100%;" /></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button onclick="addPlan()">Add Plan</button>
       </div>
     </div>
 
@@ -69,13 +156,37 @@
 
     <h2>Tenants</h2>
     <table>
-      <thead><tr><th>Business</th><th>Email</th><th>Status</th><th>Trial ends</th><th>Subscription ends</th><th></th><th>Extend</th></tr></thead>
+      <thead><tr><th>Business</th><th>Email</th><th>Plan</th><th>Status</th><th>Trial ends</th><th>Subscription ends</th><th></th><th>Extend</th></tr></thead>
       <tbody id="tenant-rows"></tbody>
     </table>
   </main>
 </div>
 
+<div class="modal-backdrop" id="tenant-modal-backdrop" onclick="if(event.target===this) closeTenantModal()">
+  <div class="modal">
+    <h3 id="tenant-modal-title">Tenant details</h3>
+    <dl id="tenant-modal-body"></dl>
+    <div style="margin-top:16px; text-align:right;">
+      <button class="secondary" onclick="closeTenantModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
 <script>
+function toast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 220);
+  }, 2600);
+}
+
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
   if (res.status === 401) { showLogin(); throw new Error('unauthorized'); }
@@ -89,6 +200,7 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   loadPlatformSettings();
+  loadPlans();
   loadPayments();
   loadTenants();
 }
@@ -116,22 +228,92 @@ function escapeHtml(str) {
 async function loadPlatformSettings() {
   const s = await api('/api/superadmin/platform-settings');
   document.getElementById('platform_openai_model').value = s.platform_openai_model || '';
+  document.getElementById('platform_gemini_model').value = s.platform_gemini_model || '';
   document.getElementById('default_trial_days').value = s.default_trial_days || '';
-  document.getElementById('platform-key-masked').textContent = s.platform_openai_api_key_masked ? '(currently: ' + s.platform_openai_api_key_masked + ')' : '(not set)';
+  document.getElementById('platform-openai-key-masked').textContent = s.platform_openai_api_key_masked ? '(currently: ' + s.platform_openai_api_key_masked + ')' : '(not set)';
+  document.getElementById('platform-gemini-key-masked').textContent = s.platform_gemini_api_key_masked ? '(currently: ' + s.platform_gemini_api_key_masked + ')' : '(not set)';
+
+  const provider = s.platform_ai_provider || 'openai';
+  document.getElementById('ai-provider-openai').checked = provider === 'openai';
+  document.getElementById('ai-provider-gemini').checked = provider === 'gemini';
+  onAiProviderChange();
+}
+
+function onAiProviderChange() {
+  const gemini = document.getElementById('ai-provider-gemini').checked;
+  document.getElementById('ai-panel-openai').style.display = gemini ? 'none' : 'block';
+  document.getElementById('ai-panel-gemini').style.display = gemini ? 'block' : 'none';
 }
 
 async function savePlatformSettings() {
   const body = {
+    platform_ai_provider: document.getElementById('ai-provider-gemini').checked ? 'gemini' : 'openai',
     platform_openai_api_key: document.getElementById('platform_openai_api_key').value,
     platform_openai_model: document.getElementById('platform_openai_model').value,
+    platform_gemini_api_key: document.getElementById('platform_gemini_api_key').value,
+    platform_gemini_model: document.getElementById('platform_gemini_model').value,
     default_trial_days: document.getElementById('default_trial_days').value
   };
   await api('/api/superadmin/platform-settings', { method: 'POST', body: JSON.stringify(body) });
   document.getElementById('platform_openai_api_key').value = '';
-  const msg = document.getElementById('platform-save-msg');
-  msg.textContent = 'Saved ✓';
+  document.getElementById('platform_gemini_api_key').value = '';
+  toast('Platform settings saved');
   loadPlatformSettings();
-  setTimeout(() => msg.textContent = '', 2000);
+}
+
+async function testAiConnection() {
+  const box = document.getElementById('ai-test-result');
+  box.style.color = '#6b7280';
+  box.textContent = 'Testing...';
+  try {
+    const res = await fetch('/api/superadmin/test-ai', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      box.style.color = '#166534';
+      box.textContent = '✓ Working (' + data.provider + ', ' + data.model + ') — sample reply: "' + data.sample + '"';
+    } else {
+      box.style.color = '#991b1b';
+      box.textContent = '✗ ' + (data.error || 'Unknown error');
+    }
+  } catch (e) {
+    box.style.color = '#991b1b';
+    box.textContent = '✗ Request failed: ' + e.message;
+  }
+}
+
+async function loadPlans() {
+  const plans = await api('/api/superadmin/plans');
+  const tbody = document.getElementById('plan-rows');
+  tbody.innerHTML = '';
+  plans.forEach(p => {
+    const tr = document.createElement('tr');
+    if (!p.active) tr.style.opacity = '0.5';
+    tr.innerHTML =
+      '<td>' + escapeHtml(p.name) + (p.active ? '' : ' (inactive)') + '</td>' +
+      '<td>' + p.reply_limit.toLocaleString() + '</td>' +
+      '<td>৳' + p.price_bdt + '</td>' +
+      '<td>' + (p.active ? '<button class="danger" onclick="deactivatePlan(' + p.id + ')">Deactivate</button>' : '') + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+async function addPlan() {
+  const name = document.getElementById('new-plan-name').value.trim();
+  const reply_limit = document.getElementById('new-plan-limit').value;
+  const price_bdt = document.getElementById('new-plan-price').value;
+  if (!name || !reply_limit || !price_bdt) return;
+  await api('/api/superadmin/plans', { method: 'POST', body: JSON.stringify({ name, reply_limit, price_bdt }) });
+  document.getElementById('new-plan-name').value = '';
+  document.getElementById('new-plan-limit').value = '';
+  document.getElementById('new-plan-price').value = '';
+  loadPlans();
+  toast('Plan added');
+}
+
+async function deactivatePlan(id) {
+  await api('/api/superadmin/plans/' + id + '/deactivate', { method: 'POST' });
+  loadPlans();
+  toast('Plan deactivated');
 }
 
 async function loadPayments() {
@@ -157,10 +339,14 @@ async function decide(id, action) {
   await api('/api/superadmin/payments/' + id + '/' + action, { method: 'POST' });
   loadPayments();
   loadTenants();
+  toast(action === 'approve' ? 'Payment approved' : 'Payment rejected', action === 'approve' ? 'success' : 'error');
 }
+
+let tenantsCache = [];
 
 async function loadTenants() {
   const tenants = await api('/api/superadmin/tenants');
+  tenantsCache = tenants;
   const tbody = document.getElementById('tenant-rows');
   tbody.innerHTML = '';
   tenants.forEach(t => {
@@ -171,16 +357,43 @@ async function loadTenants() {
     tr.innerHTML =
       '<td>' + escapeHtml(t.business_name) + '</td>' +
       '<td>' + escapeHtml(t.email) + '</td>' +
+      '<td>' + escapeHtml(t.plan_name || '—') + '</td>' +
       '<td>' + badge + '</td>' +
       '<td>' + new Date(t.trial_ends_at).toLocaleDateString() + '</td>' +
       '<td>' + (t.subscription_ends_at ? new Date(t.subscription_ends_at).toLocaleDateString() : '—') + '</td>' +
-      '<td><button class="secondary" onclick="impersonate(' + t.id + ')">Log in as</button> ' +
+      '<td><button class="secondary" onclick="viewTenant(' + t.id + ')">View</button> ' +
+      '<button class="secondary" onclick="impersonate(' + t.id + ')">Log in as</button> ' +
       '<button class="' + (t.suspended ? 'success' : 'danger') + '" onclick="toggleSuspend(' + t.id + ',' + (!t.suspended) + ')">' +
       (t.suspended ? 'Unsuspend' : 'Suspend') + '</button></td>' +
       '<td><input type="number" min="1" placeholder="days" style="width:60px;" id="extend-days-' + t.id + '" />' +
       '<button onclick="extendTenant(' + t.id + ')">Extend</button></td>';
     tbody.appendChild(tr);
   });
+}
+
+async function viewTenant(id) {
+  const d = await api('/api/superadmin/tenants/' + id + '/details');
+  document.getElementById('tenant-modal-title').textContent = d.tenant.business_name;
+  const dl = document.getElementById('tenant-modal-body');
+  const rows = [
+    ['Email', d.tenant.email],
+    ['Status', d.tenant.suspended ? 'Suspended' : (d.tenant.active ? 'Active' : 'Expired')],
+    ['Plan', d.plan ? d.plan.name + ' (৳' + d.plan.price_bdt + '/mo)' : 'None'],
+    ['Usage', d.plan ? d.usage.used + ' / ' + d.usage.limit + ' replies' : d.usage.used + ' replies (unlimited)'],
+    ['Reply mode', d.settings.reply_mode],
+    ['Facebook enabled', d.settings.fb_enabled === 'true' ? 'Yes' : 'No'],
+    ['WhatsApp enabled', d.settings.whatsapp_enabled === 'true' ? 'Yes (' + d.settings.whatsapp_mode + ')' : 'No'],
+    ['Products', d.products_count],
+    ['Orders', d.orders_count],
+    ['Total AI replies', d.dashboard.total_ai_replies],
+    ['Conversations', d.dashboard.total_conversations]
+  ];
+  dl.innerHTML = rows.map(([k, v]) => '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(String(v)) + '</dd>').join('');
+  document.getElementById('tenant-modal-backdrop').classList.add('open');
+}
+
+function closeTenantModal() {
+  document.getElementById('tenant-modal-backdrop').classList.remove('open');
 }
 
 async function extendTenant(id) {
@@ -190,6 +403,7 @@ async function extendTenant(id) {
   await api('/api/superadmin/tenants/' + id + '/extend', { method: 'POST', body: JSON.stringify({ days }) });
   input.value = '';
   loadTenants();
+  toast('Extended by ' + days + ' day(s)');
 }
 
 async function impersonate(id) {
@@ -200,6 +414,7 @@ async function impersonate(id) {
 async function toggleSuspend(id, suspended) {
   await api('/api/superadmin/tenants/' + id + '/suspend', { method: 'POST', body: JSON.stringify({ suspended }) });
   loadTenants();
+  toast(suspended ? 'Tenant suspended' : 'Tenant unsuspended', suspended ? 'error' : 'success');
 }
 
 api('/api/superadmin/session').then(s => { if (s.loggedIn) showApp(); else showLogin(); });

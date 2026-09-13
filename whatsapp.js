@@ -91,8 +91,25 @@ function connectTenant(tenantId, io) {
       await db.addMessage(conversation.id, 'in', 'user', text || '[Image]');
       if (!conversation.ai_enabled) return;
 
+      const usage = await db.getReplyUsage(tenantId);
+      if (usage.exceeded) {
+        const limitMsg = ai.channelSetting(settings, 'whatsapp', 'limit_reached_message');
+        try {
+          await humanDelay();
+          await msg.reply(limitMsg);
+          await db.addMessage(conversation.id, 'out', 'system', limitMsg);
+        } catch (err) {
+          console.error(`[whatsapp] tenant ${tenantId} limit-reached message failed:`, err.message);
+        }
+        return;
+      }
+
       try {
-        const reply = await ai.generateReply(tenantId, conversation.id, text, imageData);
+        let reply = await ai.generateReply(tenantId, conversation.id, text, imageData, 'whatsapp');
+        if (settings.bot_disclosure_enabled !== 'false' && db.shouldShowDisclosure(conversation)) {
+          reply = `${settings.bot_disclosure_message}\n\n${reply}`;
+          await db.markDisclosureShown(conversation.id);
+        }
 
         // Anti-ban pacing: show a typing indicator and wait a human-like
         // amount of time before sending, instead of replying instantly.
@@ -106,10 +123,11 @@ function connectTenant(tenantId, io) {
         await db.addMessage(conversation.id, 'out', 'ai', reply);
       } catch (err) {
         console.error(`[whatsapp] tenant ${tenantId} AI reply failed:`, err.message);
+        const fallbackMsg = ai.channelSetting(settings, 'whatsapp', 'fallback_message');
         try {
           await humanDelay();
-          await msg.reply(settings.fallback_message);
-          await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+          await msg.reply(fallbackMsg);
+          await db.addMessage(conversation.id, 'out', 'system', fallbackMsg);
         } catch (err2) {
           console.error(`[whatsapp] tenant ${tenantId} fallback reply also failed:`, err2.message);
         }

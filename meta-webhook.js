@@ -72,17 +72,35 @@ async function handleFacebookEntries(entries) {
       await db.addMessage(conversation.id, 'in', 'user', text || '[Image]');
       if (!conversation.ai_enabled) continue;
 
+      const usage = await db.getReplyUsage(tenantId);
+      if (usage.exceeded) {
+        const limitMsg = ai.channelSetting(settings, 'facebook', 'limit_reached_message');
+        try {
+          await humanDelay();
+          await sendFacebookMessage(settings.fb_page_access_token, senderId, limitMsg);
+          await db.addMessage(conversation.id, 'out', 'system', limitMsg);
+        } catch (err) {
+          console.error(`[facebook] tenant ${tenantId} limit-reached message failed:`, err.message);
+        }
+        continue;
+      }
+
       try {
-        const reply = await ai.generateReply(tenantId, conversation.id, text, imageData);
+        let reply = await ai.generateReply(tenantId, conversation.id, text, imageData, 'facebook');
+        if (settings.bot_disclosure_enabled !== 'false' && db.shouldShowDisclosure(conversation)) {
+          reply = `${settings.bot_disclosure_message}\n\n${reply}`;
+          await db.markDisclosureShown(conversation.id);
+        }
         await humanDelay();
         await sendFacebookMessage(settings.fb_page_access_token, senderId, reply);
         await db.addMessage(conversation.id, 'out', 'ai', reply);
       } catch (err) {
         console.error(`[facebook] tenant ${tenantId} AI reply failed:`, err.message);
+        const fallbackMsg = ai.channelSetting(settings, 'facebook', 'fallback_message');
         try {
           await humanDelay();
-          await sendFacebookMessage(settings.fb_page_access_token, senderId, settings.fallback_message);
-          await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+          await sendFacebookMessage(settings.fb_page_access_token, senderId, fallbackMsg);
+          await db.addMessage(conversation.id, 'out', 'system', fallbackMsg);
         } catch (err2) {
           console.error(`[facebook] tenant ${tenantId} fallback reply also failed:`, err2.message);
         }
@@ -117,6 +135,12 @@ async function handleWhatsappCloudEntries(entries) {
       const settings = await db.getSettings(tenantId);
       if (settings.whatsapp_enabled !== 'true' || settings.whatsapp_mode !== 'cloud_api') continue;
 
+      // Tenants connected via Embedded Signup have no token of their own —
+      // sending uses the one platform-wide system user token instead. A
+      // tenant's own wa_cloud_access_token (manual setup) still wins if set.
+      const platformSettings = await db.getPlatformSettings();
+      const accessToken = settings.wa_cloud_access_token || platformSettings.platform_wa_system_user_token;
+
       for (const message of value.messages || []) {
         const from = message.from;
         if (!from) continue;
@@ -129,7 +153,7 @@ async function handleWhatsappCloudEntries(entries) {
         } else if (message.type === 'image') {
           text = (message.image && message.image.caption) || '';
           try {
-            imageData = await fetchWhatsappCloudMedia(message.image.id, settings.wa_cloud_access_token);
+            imageData = await fetchWhatsappCloudMedia(message.image.id, accessToken);
           } catch (err) {
             console.error(`[whatsapp-cloud] tenant ${tenantId} media download failed:`, err.message);
           }
@@ -145,17 +169,35 @@ async function handleWhatsappCloudEntries(entries) {
         await db.addMessage(conversation.id, 'in', 'user', text || '[Image]');
         if (!conversation.ai_enabled) continue;
 
+        const usage = await db.getReplyUsage(tenantId);
+        if (usage.exceeded) {
+          const limitMsg = ai.channelSetting(settings, 'whatsapp', 'limit_reached_message');
+          try {
+            await humanDelay();
+            await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, accessToken, from, limitMsg);
+            await db.addMessage(conversation.id, 'out', 'system', limitMsg);
+          } catch (err) {
+            console.error(`[whatsapp-cloud] tenant ${tenantId} limit-reached message failed:`, err.message);
+          }
+          continue;
+        }
+
         try {
-          const reply = await ai.generateReply(tenantId, conversation.id, text, imageData);
+          let reply = await ai.generateReply(tenantId, conversation.id, text, imageData, 'whatsapp');
+          if (settings.bot_disclosure_enabled !== 'false' && db.shouldShowDisclosure(conversation)) {
+            reply = `${settings.bot_disclosure_message}\n\n${reply}`;
+            await db.markDisclosureShown(conversation.id);
+          }
           await humanDelay();
-          await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, settings.wa_cloud_access_token, from, reply);
+          await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, accessToken, from, reply);
           await db.addMessage(conversation.id, 'out', 'ai', reply);
         } catch (err) {
           console.error(`[whatsapp-cloud] tenant ${tenantId} AI reply failed:`, err.message);
+          const fallbackMsg = ai.channelSetting(settings, 'whatsapp', 'fallback_message');
           try {
             await humanDelay();
-            await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, settings.wa_cloud_access_token, from, settings.fallback_message);
-            await db.addMessage(conversation.id, 'out', 'system', settings.fallback_message);
+            await sendWhatsappCloudMessage(settings.wa_cloud_phone_number_id, accessToken, from, fallbackMsg);
+            await db.addMessage(conversation.id, 'out', 'system', fallbackMsg);
           } catch (err2) {
             console.error(`[whatsapp-cloud] tenant ${tenantId} fallback reply also failed:`, err2.message);
           }

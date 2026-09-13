@@ -12,6 +12,20 @@ CREATE TABLE IF NOT EXISTS tenants (
   suspended BOOLEAN DEFAULT false,
   trial_ends_at TIMESTAMPTZ NOT NULL,
   subscription_ends_at TIMESTAMPTZ, -- null until first approved payment
+  plan_id INTEGER, -- which reply-limit plan they're on; null = unlimited (e.g. during trial)
+  usage_reset_at TIMESTAMPTZ DEFAULT now(), -- start of their current usage-counting cycle
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Reply-limit plans you (super admin) define — e.g. "5,000 replies / 2,000 BDT".
+-- Tenants pick and switch between these themselves; a plan's price is what
+-- you expect them to pay by bKash, same manual-approval flow as before.
+CREATE TABLE IF NOT EXISTS plans (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  reply_limit INTEGER NOT NULL,
+  price_bdt INTEGER NOT NULL,
+  active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -47,6 +61,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   contact_id TEXT NOT NULL,
   contact_name TEXT,
   ai_enabled BOOLEAN DEFAULT true,
+  last_disclosure_at TIMESTAMPTZ, -- null = never disclosed yet in this thread
   last_message_at TIMESTAMPTZ DEFAULT now(),
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(tenant_id, platform, contact_id)
@@ -95,27 +110,49 @@ CREATE INDEX IF NOT EXISTS idx_orders_conversation ON orders(conversation_id);
 `;
 
 const DEFAULT_SETTINGS = {
-  ai_provider: 'openai', // 'openai' or 'gemini'
-  openai_api_key: '',
-  openai_model: 'gpt-4o-mini',
-  gemini_api_key: '',
-  gemini_model: 'gemini-3.5-flash',
   system_prompt: 'You are a helpful, friendly customer support assistant. Keep replies short and clear.',
   order_tools_enabled: 'true',
   fallback_message: "Sorry for the delay — I've passed this along to our team and someone will get back to you shortly!",
+  limit_reached_message: "Thanks for your message! We've hit our reply limit for this month — a team member will follow up with you directly.",
+  bot_disclosure_enabled: 'true',
+  bot_disclosure_message: "🤖 You're chatting with an automated assistant. Reply anytime to reach our team directly.",
+
+  // 'unified' = the three fields above apply to both channels.
+  // 'separate' = each channel uses its own fb_*/wa_* field below, falling
+  // back to the unified value above when its own field is left blank.
+  reply_mode: 'unified',
+  fb_system_prompt: '',
+  fb_order_tools_enabled: '',
+  fb_fallback_message: '',
+  wa_system_prompt: '',
+  wa_order_tools_enabled: '',
+  wa_fallback_message: '',
+
   fb_page_id: '',
+  fb_page_name: '', // for display only — "Connected: <name>" instead of a raw ID
   fb_page_access_token: '',
   fb_enabled: 'false',
   whatsapp_enabled: 'true',
   whatsapp_mode: 'qr', // 'qr' (whatsapp-web.js) or 'cloud_api' (official Meta API)
   wa_cloud_phone_number_id: '',
-  wa_cloud_access_token: ''
+  wa_cloud_display_number: '', // for display only
+  wa_cloud_waba_id: '',
+  wa_cloud_access_token: '' // only used if a tenant did their own separate Meta App setup instead of Embedded Signup
 };
 
 const DEFAULT_PLATFORM_SETTINGS = {
-  platform_openai_api_key: '', // fallback AI used when a tenant hasn't set their own
+  // The ONLY place AI credentials live now — tenants never set their own.
+  platform_ai_provider: 'openai', // 'openai' or 'gemini'
+  platform_openai_api_key: '',
   platform_openai_model: 'gpt-4o-mini',
-  default_trial_days: '3'
+  platform_gemini_api_key: '',
+  platform_gemini_model: 'gemini-3.5-flash',
+  default_trial_days: '3',
+  // One System User Access Token (from your Meta Business Settings) sends
+  // messages on behalf of every tenant's WhatsApp number connected via
+  // Embedded Signup — this is the standard Tech Provider pattern, so
+  // tenants never see or handle an access token themselves.
+  platform_wa_system_user_token: ''
 };
 
 async function init() {
@@ -193,6 +230,69 @@ async function extendSubscription(tenantId, days) {
   const newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   await pool.query('UPDATE tenants SET subscription_ends_at = $1 WHERE id = $2', [newEnd, tenantId]);
   return newEnd;
+}
+
+// ---------- plans ----------
+async function listPlans(activeOnly) {
+  const { rows } = await pool.query(
+    activeOnly
+      ? 'SELECT * FROM plans WHERE active = true ORDER BY price_bdt ASC'
+      : 'SELECT * FROM plans ORDER BY price_bdt ASC'
+  );
+  return rows;
+}
+
+async function getPlanById(id) {
+  if (!id) return null;
+  const { rows } = await pool.query('SELECT * FROM plans WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function createPlan(name, replyLimit, priceBdt) {
+  const { rows } = await pool.query(
+    `INSERT INTO plans (name, reply_limit, price_bdt) VALUES ($1, $2, $3) RETURNING *`,
+    [name, replyLimit, priceBdt]
+  );
+  return rows[0];
+}
+
+async function updatePlan(id, name, replyLimit, priceBdt) {
+  await pool.query(
+    `UPDATE plans SET name = $1, reply_limit = $2, price_bdt = $3 WHERE id = $4`,
+    [name, replyLimit, priceBdt, id]
+  );
+}
+
+// Soft-delete only — a hard delete would leave tenants pointing at a
+// plan_id that no longer exists (there's no FK, deliberately, to avoid a
+// table-creation ordering issue in the schema above).
+async function deactivatePlan(id) {
+  await pool.query('UPDATE plans SET active = false WHERE id = $1', [id]);
+}
+
+async function setTenantPlan(tenantId, planId) {
+  await pool.query('UPDATE tenants SET plan_id = $1 WHERE id = $2', [planId || null, tenantId]);
+}
+
+async function resetUsageCycle(tenantId) {
+  await pool.query('UPDATE tenants SET usage_reset_at = now() WHERE id = $1', [tenantId]);
+}
+
+// How many AI replies this tenant has sent since their usage cycle started,
+// and whether they're over their plan's limit. No plan assigned = unlimited.
+async function getReplyUsage(tenantId) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return { used: 0, limit: null, exceeded: false, plan: null };
+
+  const plan = await getPlanById(tenant.plan_id);
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM messages m JOIN conversations c ON c.id = m.conversation_id
+     WHERE c.tenant_id = $1 AND m.sender = 'ai' AND m.created_at >= $2`,
+    [tenantId, tenant.usage_reset_at]
+  );
+  const used = rows[0].count;
+  const limit = plan ? plan.reply_limit : null;
+  return { used, limit, exceeded: limit !== null && used >= limit, plan };
 }
 
 // Effective active-until = later of trial_ends_at and subscription_ends_at.
@@ -328,6 +428,20 @@ async function setConversationAI(tenantId, id, enabled) {
     'UPDATE conversations SET ai_enabled = $1 WHERE id = $2 AND tenant_id = $3',
     [enabled, id, tenantId]
   );
+}
+
+// Bot-disclosure policy: show it at the start of a thread, and again after
+// a long gap (Meta's Messenger/WhatsApp policy requires disclosing an
+// automated chat "at the beginning" and "after a significant lapse of
+// time"). 24 hours is used as that gap, matching the platforms' own
+// "service conversation" window concept.
+const DISCLOSURE_GAP_MS = 24 * 60 * 60 * 1000;
+function shouldShowDisclosure(conversation) {
+  if (!conversation.last_disclosure_at) return true;
+  return Date.now() - new Date(conversation.last_disclosure_at).getTime() > DISCLOSURE_GAP_MS;
+}
+async function markDisclosureShown(conversationId) {
+  await pool.query('UPDATE conversations SET last_disclosure_at = now() WHERE id = $1', [conversationId]);
 }
 
 async function getConversation(tenantId, id) {
@@ -488,6 +602,14 @@ module.exports = {
   setTenantSuspended,
   extendSubscription,
   isTenantActive,
+  listPlans,
+  getPlanById,
+  createPlan,
+  updatePlan,
+  deactivatePlan,
+  setTenantPlan,
+  resetUsageCycle,
+  getReplyUsage,
   submitPayment,
   listPaymentsForTenant,
   listPendingPayments,
@@ -501,6 +623,8 @@ module.exports = {
   getOrCreateConversation,
   listConversations,
   setConversationAI,
+  shouldShowDisclosure,
+  markDisclosureShown,
   getConversation,
   addMessage,
   getRecentMessages,

@@ -38,6 +38,22 @@ module.exports = {
   // per customer.
   FB_WEBHOOK_VERIFY_TOKEN: 'change-this-verify-token',
 
+  // ---- "Connect Facebook Page" OAuth (replaces manual Page ID/token entry) ----
+  // From your Meta App dashboard → Settings → Basic.
+  FB_APP_ID: '',
+  FB_APP_SECRET: '',
+  // Your app's public HTTPS URL (no trailing slash) — used to build the
+  // OAuth redirect URI, e.g. 'https://app.yourdomain.com'. Must exactly
+  // match a redirect URI you've allow-listed in the Meta App's Facebook
+  // Login product settings.
+  PUBLIC_BASE_URL: 'https://your-domain.example.com',
+
+  // ---- WhatsApp Embedded Signup (official "Connect WhatsApp" OAuth) ----
+  // From your Meta App dashboard → WhatsApp → Embedded Signup → the
+  // Configuration you create there. Needs your Meta Business verified
+  // first — see DEPLOY_COOLIFY.md / README for the one-time setup.
+  WA_EMBEDDED_SIGNUP_CONFIG_ID: '',
+
   // ---- Billing ----
   PRICE_BDT: 1000,
   TRIAL_DAYS: 3,

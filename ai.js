@@ -213,32 +213,49 @@ async function generateGeminiReply(tenantId, conversationId, settings, priorHist
   return response.text.trim();
 }
 
+// Picks a channel-specific override when reply_mode is 'separate' and the
+// tenant has actually set one, otherwise falls back to the shared/unified
+// value — so switching to "separate" mode doesn't blank out anything
+// they haven't customized yet.
+function channelSetting(settings, platform, baseKey) {
+  if (settings.reply_mode === 'separate') {
+    const prefixed = (platform === 'facebook' ? 'fb_' : 'wa_') + baseKey;
+    if (settings[prefixed] !== undefined && settings[prefixed] !== '') return settings[prefixed];
+  }
+  return settings[baseKey];
+}
+
 // ---------- dispatcher ----------
 /**
- * Generate an AI reply for a tenant's conversation.
+ * Generate an AI reply for a tenant's conversation. AI credentials always
+ * come from the platform-wide settings you (super admin) configure —
+ * tenants never set their own key or model.
  * @param {number} tenantId
  * @param {number} conversationId
  * @param {string} latestUserMessage
  * @param {{base64: string, mimeType: string}|null} imageData - set when the
  *   customer's latest message was an image (e.g. a payment screenshot).
+ * @param {'facebook'|'whatsapp'} platform - picks channel-specific prompt/
+ *   tools settings when the tenant has "separate" reply mode enabled.
  */
-async function generateReply(tenantId, conversationId, latestUserMessage, imageData = null) {
+async function generateReply(tenantId, conversationId, latestUserMessage, imageData = null, platform = 'whatsapp') {
   const settings = await db.getSettings(tenantId);
-  let provider = settings.ai_provider || 'openai';
-  const useTools = settings.order_tools_enabled !== 'false';
+  const platformSettings = await db.getPlatformSettings();
+  const provider = platformSettings.platform_ai_provider || 'openai';
 
-  const tenantHasKey = provider === 'gemini' ? !!settings.gemini_api_key : !!settings.openai_api_key;
-
-  if (!tenantHasKey) {
-    // Fall back to the super admin's platform-wide OpenAI key, if set.
-    const platformSettings = await db.getPlatformSettings();
-    if (!platformSettings.platform_openai_api_key) {
-      throw new Error('No AI configured — neither the tenant nor the platform has an API key set.');
-    }
-    provider = 'openai';
-    settings.openai_api_key = platformSettings.platform_openai_api_key;
-    settings.openai_model = platformSettings.platform_openai_model || 'gpt-4o-mini';
+  if (provider === 'gemini' && !platformSettings.platform_gemini_api_key) {
+    throw new Error('No AI configured — set a Gemini API key in the super admin panel.');
   }
+  if (provider === 'openai' && !platformSettings.platform_openai_api_key) {
+    throw new Error('No AI configured — set an OpenAI API key in the super admin panel.');
+  }
+
+  settings.openai_api_key = platformSettings.platform_openai_api_key;
+  settings.openai_model = platformSettings.platform_openai_model || 'gpt-4o-mini';
+  settings.gemini_api_key = platformSettings.platform_gemini_api_key;
+  settings.gemini_model = platformSettings.platform_gemini_model || 'gemini-3.5-flash';
+
+  const useTools = channelSetting(settings, platform, 'order_tools_enabled') !== 'false';
 
   const history = await db.getRecentMessages(conversationId, config.AI_HISTORY_LIMIT);
   // The incoming message is already saved before generateReply() is called,
@@ -250,7 +267,7 @@ async function generateReply(tenantId, conversationId, latestUserMessage, imageD
 
   const products = await db.listProducts(tenantId);
 
-  let systemPrompt = settings.system_prompt || 'You are a helpful assistant.';
+  let systemPrompt = channelSetting(settings, platform, 'system_prompt') || 'You are a helpful assistant.';
   if (products.length) {
     const catalogText = products
       .map((p) => `- ${p.name}${p.price ? ` (${p.price})` : ''}${p.description ? `: ${p.description}` : ''}`)
@@ -265,4 +282,38 @@ async function generateReply(tenantId, conversationId, latestUserMessage, imageD
   return generateOpenAIReply(tenantId, conversationId, settings, systemPrompt, priorHistory, latestUserMessage, imageData, useTools);
 }
 
-module.exports = { generateReply };
+// ---------- connection test (for the super admin "Test AI" button) ----------
+// Does a minimal, standalone call — no conversation history, no tools, no
+// product catalog — so a failure here can only mean the key/model/provider
+// itself is the problem, not something else in the pipeline.
+async function testConnection() {
+  const platformSettings = await db.getPlatformSettings();
+  const provider = platformSettings.platform_ai_provider || 'openai';
+
+  if (provider === 'gemini') {
+    if (!platformSettings.platform_gemini_api_key) {
+      throw new Error('No Gemini API key is set. Add one in the super admin panel.');
+    }
+    const model = platformSettings.platform_gemini_model || 'gemini-3.5-flash';
+    const { GoogleGenAI } = require('@google/genai');
+    const genAI = new GoogleGenAI({ apiKey: platformSettings.platform_gemini_api_key });
+    const response = await genAI.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: test successful' }] }]
+    });
+    return { ok: true, provider: 'gemini', model, sample: response.text };
+  }
+
+  if (!platformSettings.platform_openai_api_key) {
+    throw new Error('No OpenAI API key is set. Add one in the super admin panel.');
+  }
+  const model = platformSettings.platform_openai_model || 'gpt-4o-mini';
+  const openai = new OpenAI({ apiKey: platformSettings.platform_openai_api_key });
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: 'Reply with exactly: test successful' }]
+  });
+  return { ok: true, provider: 'openai', model, sample: completion.choices[0].message.content };
+}
+
+module.exports = { generateReply, testConnection, channelSetting };
