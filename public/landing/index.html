@@ -196,12 +196,16 @@
       <p>Three days, full access, nothing to pay yet. Set up your shop and see real replies go out before you decide.</p>
     </div>
     <form class="signup-form" onsubmit="return doSignup(event)">
-      <label>Business name</label>
+      <label>Name</label>
       <input id="s-business" type="text" required />
+      <label>Phone number</label>
+      <input id="s-phone" type="tel" required />
+      <label>WhatsApp number</label>
+      <input id="s-whatsapp" type="tel" required />
       <label>Email</label>
       <input id="s-email" type="email" required />
       <label>Password</label>
-      <input id="s-password" type="password" required minlength="6" />
+      <input id="s-password" type="password" required minlength="8" />
       <button class="btn" type="submit" id="signup-submit-btn">Create my account</button>
       <div id="signup-error"></div>
       <div id="signup-success"></div>
@@ -217,6 +221,8 @@
 async function doSignup(e) {
   e.preventDefault();
   const business_name = document.getElementById('s-business').value.trim();
+  const phone = document.getElementById('s-phone').value.trim();
+  const whatsapp_number = document.getElementById('s-whatsapp').value.trim();
   const email = document.getElementById('s-email').value.trim();
   const password = document.getElementById('s-password').value;
   const errBox = document.getElementById('signup-error');
@@ -231,7 +237,7 @@ async function doSignup(e) {
   const res = await fetch('/api/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ business_name, email, password })
+    body: JSON.stringify({ business_name, phone, whatsapp_number, email, password })
   });
   const data = await res.json().catch(() => ({}));
   if (res.ok) {

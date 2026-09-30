@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8" />
 <title>Admin Panel</title>
-<script src="/socket.io/socket.io.js"></script>
 <script async defer src="https://connect.facebook.net/en_US/sdk.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -131,6 +130,13 @@
   .badge { transition: background-color 0.25s ease, color 0.25s ease; }
   select { cursor: pointer; }
 
+  .spinner {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 7px; vertical-align: -2px;
+  }
+  .btn.secondary .spinner { border-color: rgba(255,255,255,0.4); border-top-color: #fff; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   @media (prefers-reduced-motion: reduce) {
     *, .tab.active, .toast, .modal-backdrop .modal { animation: none !important; transition: none !important; }
   }
@@ -162,11 +168,11 @@
   <nav>
     <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
     <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">Settings</button>
-    <button class="tab-btn" data-tab="whatsapp" onclick="showTab('whatsapp')">WhatsApp</button>
     <button class="tab-btn" data-tab="products" onclick="showTab('products')">Products</button>
     <button class="tab-btn" data-tab="orders" onclick="showTab('orders')">Orders</button>
     <button class="tab-btn" data-tab="conversations" onclick="showTab('conversations')">Conversations</button>
     <button class="tab-btn" data-tab="billing" onclick="showTab('billing')">Billing</button>
+    <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">Profile</button>
   </nav>
 
   <main>
@@ -199,6 +205,10 @@
           <div class="stat-card">
             <div class="num" id="stat-fb-conversations">—</div>
             <div class="label">Facebook chats</div>
+          </div>
+          <div class="stat-card">
+            <div class="num" id="stat-ig-conversations">—</div>
+            <div class="label">Instagram chats</div>
           </div>
           <div class="stat-card">
             <div class="num" id="stat-wa-conversations">—</div>
@@ -271,6 +281,17 @@
               <label style="margin-top:14px;">Fallback message <span style="font-weight:400;color:#9ca3af;">(blank = shared)</span></label>
               <input id="fb_fallback_message" type="text" />
             </div>
+            <div class="col" style="border-right:1px solid #e5e7eb; padding-right:20px;">
+              <h4>Instagram override</h4>
+              <label>System Prompt <span style="font-weight:400;color:#9ca3af;">(blank = use the shared one above)</span></label>
+              <textarea id="ig_system_prompt"></textarea>
+              <div class="toggle-row">
+                <input type="checkbox" id="ig_order_tools_enabled" />
+                <span>Confirm orders / record payments on Instagram</span>
+              </div>
+              <label style="margin-top:14px;">Fallback message <span style="font-weight:400;color:#9ca3af;">(blank = shared)</span></label>
+              <input id="ig_fallback_message" type="text" />
+            </div>
             <div class="col">
               <h4>WhatsApp override</h4>
               <label>System Prompt <span style="font-weight:400;color:#9ca3af;">(blank = use the shared one above)</span></label>
@@ -307,41 +328,19 @@
           <input id="fb_page_access_token" type="text" placeholder="EAAG..." />
         </div>
 
+        <h3 style="margin-top:24px;">Instagram</h3>
+        <p style="color:#6b7280; font-size:13px;">Instagram DMs use the same Facebook Page connection above — connect your Page first, then just switch this on. Your Page's linked Instagram professional account is required.</p>
+        <div class="toggle-row">
+          <input type="checkbox" id="ig_enabled" />
+          <span>Enable Instagram auto-reply</span>
+        </div>
+
         <h3 style="margin-top:24px;">WhatsApp</h3>
         <div class="toggle-row">
           <input type="checkbox" id="whatsapp_enabled" />
           <span>Enable WhatsApp auto-reply</span>
         </div>
-
-        <div style="margin-top:20px;">
-          <button class="btn" onclick="saveSettings()">Save Settings</button>
-          <span class="save-msg" id="save-msg"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- WHATSAPP TAB -->
-    <div class="tab" id="tab-whatsapp">
-      <div class="card">
-        <h3>Connection method</h3>
-        <div class="toggle-row">
-          <input type="radio" name="wa-mode" id="wa-mode-qr" value="qr" onchange="onWaModeChange()" />
-          <span>QR Code — quick setup, unofficial (scan with your phone)</span>
-        </div>
-        <div class="toggle-row">
-          <input type="radio" name="wa-mode" id="wa-mode-cloud" value="cloud_api" onchange="onWaModeChange()" />
-          <span>Official Cloud API — needs a Meta Business WhatsApp setup, no ban risk</span>
-        </div>
-
-        <div id="wa-qr-panel" style="margin-top:20px;">
-          <h4>WhatsApp Connection <span id="wa-badge" class="badge disconnected">disconnected</span></h4>
-          <p id="wa-instructions">Click Connect, then scan the QR code with WhatsApp on your phone (Settings → Linked Devices → Link a Device).</p>
-          <div id="qr-box"></div>
-          <button class="btn" id="wa-connect-btn" onclick="connectWhatsapp()">Connect</button>
-          <button class="btn danger" onclick="resetWhatsapp()">Disconnect / Reset Session</button>
-        </div>
-
-        <div id="wa-cloud-panel" style="margin-top:20px; display:none;">
+        <div style="margin-top:12px;">
           <h4>Official WhatsApp Cloud API <span id="wa-cloud-badge" class="badge disconnected">not connected</span></h4>
           <p style="color:#6b7280; font-size:13px;" id="wa-cloud-connected-line" style="display:none;"></p>
           <button class="btn" id="wa-embedded-signup-btn" onclick="startWhatsappEmbeddedSignup()">Connect WhatsApp</button>
@@ -352,10 +351,23 @@
             <input id="wa_cloud_phone_number_id" type="text" placeholder="e.g. 109876543210987" />
             <label>Access Token <span style="font-weight:400;color:#9ca3af;">(only needed if not using Connect WhatsApp above)</span></label>
             <input id="wa_cloud_access_token" type="text" placeholder="EAAG..." />
-            <div style="margin-top:12px;">
-              <button class="btn" onclick="saveSettings()">Save Settings</button>
-            </div>
           </div>
+        </div>
+
+        <h3 style="margin-top:24px;">Business website</h3>
+        <p style="color:#6b7280; font-size:13px;">Paste your website link and let the AI read it — it'll write a short business summary the AI can use to answer general questions (what you do, policies, etc.), on top of your product catalog. You can edit the result any time.</p>
+        <div class="row" style="align-items:flex-end;">
+          <div class="col"><label>Website URL</label><input id="website_url" type="text" placeholder="https://yourshop.com" /></div>
+          <div class="col" style="flex:0 0 auto; margin-top:14px;">
+            <button class="btn secondary" id="scan-website-btn" onclick="scanWebsite()">Scan Website with AI</button>
+          </div>
+        </div>
+        <label style="margin-top:14px;">Website info <span style="font-weight:400;color:#9ca3af;">(what the AI knows about your business from your site — editable)</span></label>
+        <textarea id="website_info" placeholder="Click Scan Website above, or write this yourself."></textarea>
+
+        <div style="margin-top:20px;">
+          <button class="btn" onclick="saveSettings()">Save Settings</button>
+          <span class="save-msg" id="save-msg"></span>
         </div>
       </div>
     </div>
@@ -368,8 +380,11 @@
         <table style="width:100%; border-collapse:collapse; margin-top:10px;" id="product-table">
           <thead>
             <tr style="text-align:left; border-bottom:1px solid #e5e7eb;">
+              <th style="padding:8px;"></th>
               <th style="padding:8px;">Name</th>
               <th style="padding:8px;">Price</th>
+              <th style="padding:8px;">Category</th>
+              <th style="padding:8px;">Stock</th>
               <th style="padding:8px;">Description</th>
               <th style="padding:8px;"></th>
             </tr>
@@ -382,8 +397,15 @@
           <div class="col"><label>Name</label><input id="p-name" type="text" /></div>
           <div class="col"><label>Price</label><input id="p-price" type="text" placeholder="e.g. 1200 BDT" /></div>
         </div>
+        <div class="row">
+          <div class="col"><label>Category</label><input id="p-category" type="text" placeholder="e.g. Shirts" /></div>
+          <div class="col"><label>SKU <span style="font-weight:400;color:#9ca3af;">(optional)</span></label><input id="p-sku" type="text" placeholder="e.g. SHRT-BLK-M" /></div>
+          <div class="col"><label>Stock quantity <span style="font-weight:400;color:#9ca3af;">(optional)</span></label><input id="p-stock" type="number" min="0" placeholder="leave blank = always in stock" /></div>
+        </div>
+        <label>Image URL <span style="font-weight:400;color:#9ca3af;">(optional — a link to a product photo)</span></label>
+        <input id="p-image" type="text" placeholder="https://..." />
         <label>Description</label>
-        <textarea id="p-desc" placeholder="Specs, sizes, colors, stock, anything customers ask about"></textarea>
+        <textarea id="p-desc" placeholder="Specs, sizes, colors, anything customers ask about"></textarea>
         <div style="margin-top:12px;">
           <button class="btn" onclick="addProduct()">Add Product</button>
         </div>
@@ -444,6 +466,39 @@
           <thead><tr><th>Trx ID</th><th>Amount</th><th>Status</th><th>Submitted</th></tr></thead>
           <tbody id="payment-rows"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- PROFILE TAB -->
+    <div class="tab" id="tab-profile">
+      <div class="card">
+        <h3>Your details</h3>
+        <label>Name</label>
+        <input id="profile-name" type="text" />
+        <label>Email <span style="font-weight:400;color:#9ca3af;">(contact support to change this)</span></label>
+        <input id="profile-email" type="email" disabled style="background:#f9fafb; color:#6b7280;" />
+        <div class="row">
+          <div class="col"><label>Phone</label><input id="profile-phone" type="text" /></div>
+          <div class="col"><label>WhatsApp number</label><input id="profile-whatsapp" type="text" /></div>
+        </div>
+        <label>Physical address <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+        <textarea id="profile-address" placeholder="Street, city, postcode — whatever you'd like on file"></textarea>
+        <div style="margin-top:16px;">
+          <button class="btn" onclick="saveProfile()">Save Details</button>
+          <span class="save-msg" id="profile-save-msg"></span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Change password</h3>
+        <label>Current password</label>
+        <input id="profile-current-password" type="password" autocomplete="current-password" />
+        <label>New password <span style="font-weight:400;color:#9ca3af;">(at least 8 characters)</span></label>
+        <input id="profile-new-password" type="password" autocomplete="new-password" minlength="8" />
+        <div style="margin-top:16px;">
+          <button class="btn" onclick="changePassword()">Update Password</button>
+          <span class="save-msg" id="password-save-msg"></span>
+        </div>
       </div>
     </div>
   </main>
@@ -612,7 +667,6 @@ function closeModalBackdrop(id) {
   el.classList.remove('open');
   setTimeout(() => { el.style.display = 'none'; }, 180);
 }
-const socket = io();
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -637,8 +691,8 @@ async function showApp() {
   loadConversations();
   loadProducts();
   loadOrders();
-  refreshWaStatus();
   loadBilling();
+  loadProfile();
   handleFacebookOauthReturn();
 }
 
@@ -707,6 +761,7 @@ async function loadDashboard() {
   setStat('stat-replies-today', d.ai_replies_today);
   setStat('stat-total-conversations', d.total_conversations);
   setStat('stat-fb-conversations', d.conversations_by_platform.facebook || 0);
+  setStat('stat-ig-conversations', d.conversations_by_platform.instagram || 0);
   setStat('stat-wa-conversations', d.conversations_by_platform.whatsapp || 0);
   setStat('stat-orders-total', d.total_orders);
   setStat('stat-orders-confirmed', d.orders_by_status.confirmed || 0);
@@ -738,6 +793,7 @@ async function loadSettings() {
   document.getElementById('fb_enabled').checked = s.fb_enabled === 'true';
   document.getElementById('fb_page_id').value = s.fb_page_id || '';
   document.getElementById('fb_page_access_token').value = s.fb_page_access_token || '';
+  document.getElementById('ig_enabled').checked = s.ig_enabled === 'true';
   document.getElementById('whatsapp_enabled').checked = s.whatsapp_enabled === 'true';
 
   if (s.fb_page_id) {
@@ -755,14 +811,14 @@ async function loadSettings() {
   document.getElementById('fb_system_prompt').value = s.fb_system_prompt || '';
   document.getElementById('fb_order_tools_enabled').checked = s.fb_order_tools_enabled === 'true';
   document.getElementById('fb_fallback_message').value = s.fb_fallback_message || '';
+  document.getElementById('ig_system_prompt').value = s.ig_system_prompt || '';
+  document.getElementById('ig_order_tools_enabled').checked = s.ig_order_tools_enabled === 'true';
+  document.getElementById('ig_fallback_message').value = s.ig_fallback_message || '';
   document.getElementById('wa_system_prompt').value = s.wa_system_prompt || '';
   document.getElementById('wa_order_tools_enabled').checked = s.wa_order_tools_enabled === 'true';
   document.getElementById('wa_fallback_message').value = s.wa_fallback_message || '';
   onReplyModeChange();
 
-  const mode = s.whatsapp_mode || 'qr';
-  document.getElementById('wa-mode-qr').checked = mode === 'qr';
-  document.getElementById('wa-mode-cloud').checked = mode === 'cloud_api';
   document.getElementById('wa_cloud_phone_number_id').value = s.wa_cloud_phone_number_id || '';
   document.getElementById('wa_cloud_access_token').value = s.wa_cloud_access_token || '';
 
@@ -781,18 +837,14 @@ async function loadSettings() {
     waCloudLine.style.display = 'none';
     waDisconnectBtn.style.display = 'none';
   }
-  onWaModeChange();
+
+  document.getElementById('website_url').value = s.website_url || '';
+  document.getElementById('website_info').value = s.website_info || '';
 }
 
 function onReplyModeChange() {
   const separate = document.getElementById('reply-mode-separate').checked;
   document.getElementById('separate-panel').style.display = separate ? 'block' : 'none';
-}
-
-function onWaModeChange() {
-  const cloud = document.getElementById('wa-mode-cloud').checked;
-  document.getElementById('wa-qr-panel').style.display = cloud ? 'none' : 'block';
-  document.getElementById('wa-cloud-panel').style.display = cloud ? 'block' : 'none';
 }
 
 async function saveSettings() {
@@ -807,51 +859,51 @@ async function saveSettings() {
     fb_system_prompt: document.getElementById('fb_system_prompt').value,
     fb_order_tools_enabled: document.getElementById('fb_order_tools_enabled').checked ? 'true' : 'false',
     fb_fallback_message: document.getElementById('fb_fallback_message').value,
+    ig_system_prompt: document.getElementById('ig_system_prompt').value,
+    ig_order_tools_enabled: document.getElementById('ig_order_tools_enabled').checked ? 'true' : 'false',
+    ig_fallback_message: document.getElementById('ig_fallback_message').value,
     wa_system_prompt: document.getElementById('wa_system_prompt').value,
     wa_order_tools_enabled: document.getElementById('wa_order_tools_enabled').checked ? 'true' : 'false',
     wa_fallback_message: document.getElementById('wa_fallback_message').value,
     fb_enabled: document.getElementById('fb_enabled').checked ? 'true' : 'false',
     fb_page_id: document.getElementById('fb_page_id').value,
     fb_page_access_token: document.getElementById('fb_page_access_token').value,
+    ig_enabled: document.getElementById('ig_enabled').checked ? 'true' : 'false',
     whatsapp_enabled: document.getElementById('whatsapp_enabled').checked ? 'true' : 'false',
-    whatsapp_mode: document.getElementById('wa-mode-cloud').checked ? 'cloud_api' : 'qr',
     wa_cloud_phone_number_id: document.getElementById('wa_cloud_phone_number_id').value,
-    wa_cloud_access_token: document.getElementById('wa_cloud_access_token').value
+    wa_cloud_access_token: document.getElementById('wa_cloud_access_token').value,
+    website_url: document.getElementById('website_url').value,
+    website_info: document.getElementById('website_info').value
   };
   await api('/api/settings', { method: 'POST', body: JSON.stringify(body) });
   toast('Settings saved');
   loadSettings();
 }
 
-async function refreshWaStatus() {
-  const { status } = await api('/api/whatsapp/status');
-  setWaBadge(status);
-}
-function setWaBadge(status) {
-  const badge = document.getElementById('wa-badge');
-  badge.textContent = status;
-  badge.className = 'badge ' + status;
-  if (status === 'connected') {
-    document.getElementById('qr-box').innerHTML = '';
-    document.getElementById('wa-instructions').textContent = 'Connected. WhatsApp will auto-reply to incoming chats.';
+async function scanWebsite() {
+  const url = document.getElementById('website_url').value.trim();
+  if (!url) { toast('Enter a website URL first', 'error'); return; }
+  const btn = document.getElementById('scan-website-btn');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Reading site...';
+  try {
+    const res = await fetch('/api/settings/scan-website', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      document.getElementById('website_info').value = data.website_info || '';
+      toast('Website scanned — review and Save Settings below');
+    } else {
+      toast(data.error || 'Could not scan that website', 'error');
+    }
+  } catch (e) {
+    toast('Request failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
   }
-}
-socket.on('wa-qr', (dataUrl) => {
-  document.getElementById('qr-box').innerHTML = '<img src="' + dataUrl + '" />';
-  setWaBadge('qr');
-});
-socket.on('wa-status', (status) => setWaBadge(status));
-
-async function connectWhatsapp() {
-  const res = await fetch('/api/whatsapp/connect', { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) { alert(data.error || 'Could not connect'); return; }
-  document.getElementById('wa-instructions').textContent = 'Starting up... QR code will appear shortly.';
-}
-
-async function resetWhatsapp() {
-  await api('/api/whatsapp/reset', { method: 'POST' });
-  setWaBadge('disconnected');
 }
 
 async function loadConversations() {
@@ -898,9 +950,16 @@ async function loadProducts() {
   products.forEach(p => {
     const tr = document.createElement('tr');
     tr.style.borderBottom = '1px solid #f1f5f9';
+    const thumb = p.image_url
+      ? '<img src="' + escapeHtml(p.image_url) + '" style="width:36px;height:36px;object-fit:cover;border-radius:4px;" onerror="this.style.display=\'none\'" />'
+      : '<div style="width:36px;height:36px;border-radius:4px;background:#f1f5f9;"></div>';
+    const stock = (p.stock_quantity === null || p.stock_quantity === undefined) ? '—' : p.stock_quantity;
     tr.innerHTML =
-      '<td style="padding:8px;">' + escapeHtml(p.name) + '</td>' +
+      '<td style="padding:8px;">' + thumb + '</td>' +
+      '<td style="padding:8px;">' + escapeHtml(p.name) + (p.sku ? '<br><span style="color:#9ca3af;font-size:11px;">SKU: ' + escapeHtml(p.sku) + '</span>' : '') + '</td>' +
       '<td style="padding:8px;">' + escapeHtml(p.price || '') + '</td>' +
+      '<td style="padding:8px;">' + escapeHtml(p.category || '') + '</td>' +
+      '<td style="padding:8px;">' + stock + '</td>' +
       '<td style="padding:8px; color:#4b5563;">' + escapeHtml(p.description || '') + '</td>' +
       '<td style="padding:8px;"><button class="btn danger" style="padding:4px 10px;" onclick="deleteProduct(' + p.id + ')">Delete</button></td>';
     tbody.appendChild(tr);
@@ -916,11 +975,19 @@ function escapeHtml(str) {
 async function addProduct() {
   const name = document.getElementById('p-name').value.trim();
   const price = document.getElementById('p-price').value.trim();
+  const category = document.getElementById('p-category').value.trim();
+  const sku = document.getElementById('p-sku').value.trim();
+  const stock_quantity = document.getElementById('p-stock').value;
+  const image_url = document.getElementById('p-image').value.trim();
   const description = document.getElementById('p-desc').value.trim();
   if (!name) return;
-  await api('/api/products', { method: 'POST', body: JSON.stringify({ name, price, description }) });
+  await api('/api/products', { method: 'POST', body: JSON.stringify({ name, price, description, category, sku, stock_quantity, image_url }) });
   document.getElementById('p-name').value = '';
   document.getElementById('p-price').value = '';
+  document.getElementById('p-category').value = '';
+  document.getElementById('p-sku').value = '';
+  document.getElementById('p-stock').value = '';
+  document.getElementById('p-image').value = '';
   document.getElementById('p-desc').value = '';
   loadProducts();
   toast('Product added');
@@ -930,6 +997,59 @@ async function deleteProduct(id) {
   await api('/api/products/' + id, { method: 'DELETE' });
   loadProducts();
   toast('Product removed');
+}
+
+async function loadProfile() {
+  const p = await api('/api/profile');
+  document.getElementById('profile-name').value = p.business_name || '';
+  document.getElementById('profile-email').value = p.email || '';
+  document.getElementById('profile-phone').value = p.phone || '';
+  document.getElementById('profile-whatsapp').value = p.whatsapp_number || '';
+  document.getElementById('profile-address').value = p.address || '';
+}
+
+async function saveProfile() {
+  const business_name = document.getElementById('profile-name').value.trim();
+  const phone = document.getElementById('profile-phone').value.trim();
+  const whatsapp_number = document.getElementById('profile-whatsapp').value.trim();
+  const address = document.getElementById('profile-address').value.trim();
+  const msg = document.getElementById('profile-save-msg');
+  const res = await fetch('/api/profile', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_name, phone, whatsapp_number, address })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    document.getElementById('header-business-name').textContent = business_name;
+    toast('Details saved');
+    msg.style.color = '#166534';
+    msg.textContent = 'Saved';
+    setTimeout(() => { msg.textContent = ''; }, 2000);
+  } else {
+    toast(data.error || 'Could not save your details', 'error');
+  }
+}
+
+async function changePassword() {
+  const current_password = document.getElementById('profile-current-password').value;
+  const new_password = document.getElementById('profile-new-password').value;
+  const msg = document.getElementById('password-save-msg');
+  if (!current_password || !new_password) { toast('Both fields are required', 'error'); return; }
+  const res = await fetch('/api/profile/change-password', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_password, new_password })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    document.getElementById('profile-current-password').value = '';
+    document.getElementById('profile-new-password').value = '';
+    toast('Password updated');
+    msg.style.color = '#166534';
+    msg.textContent = 'Updated';
+    setTimeout(() => { msg.textContent = ''; }, 2000);
+  } else {
+    toast(data.error || 'Could not update your password', 'error');
+  }
 }
 
 async function loadOrders() {
@@ -974,11 +1094,11 @@ async function loadBilling() {
 
   const planLine = document.getElementById('billing-plan-line');
   if (b.plan) {
-    planLine.innerHTML = 'Current plan: <strong>' + escapeHtml(b.plan.name) + '</strong> — ' +
+    planLine.innerHTML = 'Current plan: <strong>' + escapeHtml(b.plan.name) + '</strong> (' + formatDuration(b.plan.duration_days) + ') — ' +
       b.usage.used + ' / ' + b.usage.limit + ' replies used this cycle.';
     document.getElementById('billing-instructions').textContent =
       'Send ' + b.plan.price_bdt + ' BDT via bKash ' + b.bkash_type + ' to ' + b.bkash_number +
-      ', then enter the Transaction ID below. We will activate your account once confirmed (usually within a few hours).';
+      ', then enter the Transaction ID below. Approval extends your account by ' + formatDuration(b.plan.duration_days) + ' (usually confirmed within a few hours).';
   } else {
     planLine.textContent = 'No plan selected yet — pick one below.';
     document.getElementById('billing-instructions').textContent =
@@ -1001,6 +1121,14 @@ async function loadBilling() {
   loadPlanCards(b.plan ? b.plan.id : null);
 }
 
+function formatDuration(days) {
+  if (days === 30) return '1 month';
+  if (days === 90) return '3 months';
+  if (days === 180) return '6 months';
+  if (days === 365) return '1 year';
+  return days + ' days';
+}
+
 async function loadPlanCards(currentPlanId) {
   const plans = await api('/api/plans');
   const container = document.getElementById('plan-cards');
@@ -1012,8 +1140,8 @@ async function loadPlanCards(currentPlanId) {
     div.innerHTML =
       (isCurrent ? '<span class="current-badge">Current</span>' : '') +
       '<div class="plan-name">' + escapeHtml(p.name) + '</div>' +
-      '<div class="plan-price">৳' + p.price_bdt + '/mo</div>' +
-      '<div class="plan-limit">' + p.reply_limit.toLocaleString() + ' replies/month</div>' +
+      '<div class="plan-price">৳' + p.price_bdt + ' <span style="font-size:12px;color:#6b7280;font-weight:500;">/ ' + formatDuration(p.duration_days) + '</span></div>' +
+      '<div class="plan-limit">' + p.reply_limit.toLocaleString() + ' replies / cycle</div>' +
       (isCurrent ? '' : '<button class="btn" style="width:100%;" onclick="switchPlan(' + p.id + ')">Switch to this plan</button>');
     container.appendChild(div);
   });

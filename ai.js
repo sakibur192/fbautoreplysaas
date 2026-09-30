@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const config = require('./config');
 const db = require('./db');
+const { estimateCostUsd } = require('./pricing');
 
 // ---------- shared: order/payment tools the AI can call ----------
 // Same two actions regardless of provider: confirm an order once details
@@ -110,6 +111,8 @@ async function generateOpenAIReply(tenantId, conversationId, settings, systemPro
 
   let completion = await openai.chat.completions.create(callOptions);
   let choice = completion.choices[0];
+  let inputTokens = (completion.usage && completion.usage.prompt_tokens) || 0;
+  let outputTokens = (completion.usage && completion.usage.completion_tokens) || 0;
 
   if (choice.message.tool_calls && choice.message.tool_calls.length) {
     messages.push(choice.message);
@@ -121,9 +124,11 @@ async function generateOpenAIReply(tenantId, conversationId, settings, systemPro
     }
     completion = await openai.chat.completions.create({ model: settings.openai_model || 'gpt-4o-mini', messages });
     choice = completion.choices[0];
+    inputTokens += (completion.usage && completion.usage.prompt_tokens) || 0;
+    outputTokens += (completion.usage && completion.usage.completion_tokens) || 0;
   }
 
-  return choice.message.content.trim();
+  return { text: choice.message.content.trim(), inputTokens, outputTokens };
 }
 
 // ---------- Gemini ----------
@@ -200,6 +205,8 @@ async function generateGeminiReply(tenantId, conversationId, settings, priorHist
 
   let response = await ai.models.generateContent({ model, contents, config: config2 });
   const calls = response.functionCalls;
+  let inputTokens = (response.usageMetadata && response.usageMetadata.promptTokenCount) || 0;
+  let outputTokens = (response.usageMetadata && response.usageMetadata.candidatesTokenCount) || 0;
 
   if (calls && calls.length) {
     contents.push({ role: 'model', parts: calls.map((c) => ({ functionCall: c })) });
@@ -208,52 +215,90 @@ async function generateGeminiReply(tenantId, conversationId, settings, priorHist
       contents.push({ role: 'user', parts: [{ functionResponse: { name: call.name, response: result } }] });
     }
     response = await ai.models.generateContent({ model, contents, config: { systemInstruction: systemPrompt } });
+    inputTokens += (response.usageMetadata && response.usageMetadata.promptTokenCount) || 0;
+    outputTokens += (response.usageMetadata && response.usageMetadata.candidatesTokenCount) || 0;
   }
 
-  return response.text.trim();
+  return { text: response.text.trim(), inputTokens, outputTokens };
 }
 
 // Picks a channel-specific override when reply_mode is 'separate' and the
 // tenant has actually set one, otherwise falls back to the shared/unified
 // value — so switching to "separate" mode doesn't blank out anything
 // they haven't customized yet.
+const CHANNEL_PREFIXES = { facebook: 'fb_', instagram: 'ig_', whatsapp: 'wa_' };
 function channelSetting(settings, platform, baseKey) {
   if (settings.reply_mode === 'separate') {
-    const prefixed = (platform === 'facebook' ? 'fb_' : 'wa_') + baseKey;
+    const prefixed = (CHANNEL_PREFIXES[platform] || 'wa_') + baseKey;
     if (settings[prefixed] !== undefined && settings[prefixed] !== '') return settings[prefixed];
   }
   return settings[baseKey];
 }
 
+// Which AI credentials actually get used for this tenant's replies.
+// Priority: the tenant's own super-admin-set override (if one is
+// configured) → the universal platform-wide key. Tenants never see or set
+// this themselves — it's set only from the super admin "AI Key" modal.
+function resolveAiCredentials(settings, platformSettings) {
+  if (settings.override_ai_provider === 'openai' && settings.override_openai_api_key) {
+    return {
+      provider: 'openai',
+      openai_api_key: settings.override_openai_api_key,
+      openai_model: settings.override_openai_model || 'gpt-4o-mini',
+      gemini_api_key: '',
+      gemini_model: '',
+      usingOverride: true
+    };
+  }
+  if (settings.override_ai_provider === 'gemini' && settings.override_gemini_api_key) {
+    return {
+      provider: 'gemini',
+      openai_api_key: '',
+      openai_model: '',
+      gemini_api_key: settings.override_gemini_api_key,
+      gemini_model: settings.override_gemini_model || 'gemini-3.5-flash',
+      usingOverride: true
+    };
+  }
+  return {
+    provider: platformSettings.platform_ai_provider || 'openai',
+    openai_api_key: platformSettings.platform_openai_api_key,
+    openai_model: platformSettings.platform_openai_model || 'gpt-4o-mini',
+    gemini_api_key: platformSettings.platform_gemini_api_key,
+    gemini_model: platformSettings.platform_gemini_model || 'gemini-3.5-flash',
+    usingOverride: false
+  };
+}
+
 // ---------- dispatcher ----------
 /**
- * Generate an AI reply for a tenant's conversation. AI credentials always
- * come from the platform-wide settings you (super admin) configure —
- * tenants never set their own key or model.
+ * Generate an AI reply for a tenant's conversation. Credentials resolve via
+ * resolveAiCredentials(): a tenant-specific override if the super admin set
+ * one, otherwise the universal platform key — tenants never set their own.
  * @param {number} tenantId
  * @param {number} conversationId
  * @param {string} latestUserMessage
  * @param {{base64: string, mimeType: string}|null} imageData - set when the
  *   customer's latest message was an image (e.g. a payment screenshot).
- * @param {'facebook'|'whatsapp'} platform - picks channel-specific prompt/
- *   tools settings when the tenant has "separate" reply mode enabled.
+ * @param {'facebook'|'instagram'|'whatsapp'} platform - picks channel-specific
+ *   prompt/tools settings when the tenant has "separate" reply mode enabled.
  */
 async function generateReply(tenantId, conversationId, latestUserMessage, imageData = null, platform = 'whatsapp') {
   const settings = await db.getSettings(tenantId);
   const platformSettings = await db.getPlatformSettings();
-  const provider = platformSettings.platform_ai_provider || 'openai';
+  const creds = resolveAiCredentials(settings, platformSettings);
 
-  if (provider === 'gemini' && !platformSettings.platform_gemini_api_key) {
+  if (creds.provider === 'gemini' && !creds.gemini_api_key) {
     throw new Error('No AI configured — set a Gemini API key in the super admin panel.');
   }
-  if (provider === 'openai' && !platformSettings.platform_openai_api_key) {
+  if (creds.provider === 'openai' && !creds.openai_api_key) {
     throw new Error('No AI configured — set an OpenAI API key in the super admin panel.');
   }
 
-  settings.openai_api_key = platformSettings.platform_openai_api_key;
-  settings.openai_model = platformSettings.platform_openai_model || 'gpt-4o-mini';
-  settings.gemini_api_key = platformSettings.platform_gemini_api_key;
-  settings.gemini_model = platformSettings.platform_gemini_model || 'gemini-3.5-flash';
+  settings.openai_api_key = creds.openai_api_key;
+  settings.openai_model = creds.openai_model;
+  settings.gemini_api_key = creds.gemini_api_key;
+  settings.gemini_model = creds.gemini_model;
 
   const useTools = channelSetting(settings, platform, 'order_tools_enabled') !== 'false';
 
@@ -268,52 +313,122 @@ async function generateReply(tenantId, conversationId, latestUserMessage, imageD
   const products = await db.listProducts(tenantId);
 
   let systemPrompt = channelSetting(settings, platform, 'system_prompt') || 'You are a helpful assistant.';
+  if (settings.website_info) {
+    systemPrompt += `\n\nHere is background information about this business, gathered from their website. Use it to answer general questions (what the business does, policies, etc.):\n\n${settings.website_info}`;
+  }
   if (products.length) {
     const catalogText = products
-      .map((p) => `- ${p.name}${p.price ? ` (${p.price})` : ''}${p.description ? `: ${p.description}` : ''}`)
+      .map((p) => {
+        const bits = [p.price ? `Price: ${p.price}` : null, p.category ? `Category: ${p.category}` : null, p.sku ? `SKU: ${p.sku}` : null,
+          (p.stock_quantity !== null && p.stock_quantity !== undefined) ? `Stock: ${p.stock_quantity}` : null];
+        const meta = bits.filter(Boolean).join(', ');
+        return `- ${p.name}${meta ? ` (${meta})` : ''}${p.description ? `: ${p.description}` : ''}`;
+      })
       .join('\n');
     systemPrompt += `\n\nHere is the current product catalog. Answer customer questions using only this information. If something isn't covered here, say you'll check and get back to them rather than guessing.\n\n${catalogText}`;
   }
   if (useTools) systemPrompt += `\n\n${ORDER_TOOL_INSTRUCTIONS}`;
 
-  if (provider === 'gemini') {
-    return generateGeminiReply(tenantId, conversationId, settings, priorHistory, systemPrompt, latestUserMessage, imageData, useTools);
+  const result = creds.provider === 'gemini'
+    ? await generateGeminiReply(tenantId, conversationId, settings, priorHistory, systemPrompt, latestUserMessage, imageData, useTools)
+    : await generateOpenAIReply(tenantId, conversationId, settings, systemPrompt, priorHistory, latestUserMessage, imageData, useTools);
+
+  // Cost logging must never break an actual reply — if it fails, log and
+  // move on rather than losing the customer's message.
+  try {
+    const model = creds.provider === 'gemini' ? creds.gemini_model : creds.openai_model;
+    const costUsd = estimateCostUsd(creds.provider, model, result.inputTokens, result.outputTokens);
+    await db.recordAiUsage(tenantId, conversationId, creds.provider, model, result.inputTokens, result.outputTokens, costUsd, creds.usingOverride);
+  } catch (err) {
+    console.error(`[ai] cost logging failed for tenant ${tenantId}:`, err.message);
   }
-  return generateOpenAIReply(tenantId, conversationId, settings, systemPrompt, priorHistory, latestUserMessage, imageData, useTools);
+
+  return result.text;
 }
 
 // ---------- connection test (for the super admin "Test AI" button) ----------
 // Does a minimal, standalone call — no conversation history, no tools, no
 // product catalog — so a failure here can only mean the key/model/provider
 // itself is the problem, not something else in the pipeline.
-async function testConnection() {
+// Pass a tenantId to test that specific tenant's override key instead of
+// the universal platform key.
+async function testConnection(tenantId = null) {
   const platformSettings = await db.getPlatformSettings();
-  const provider = platformSettings.platform_ai_provider || 'openai';
-
-  if (provider === 'gemini') {
-    if (!platformSettings.platform_gemini_api_key) {
-      throw new Error('No Gemini API key is set. Add one in the super admin panel.');
+  let creds;
+  if (tenantId) {
+    const settings = await db.getSettings(tenantId);
+    if (!settings.override_ai_provider) {
+      throw new Error('This tenant has no AI key override set — it uses the universal platform key.');
     }
-    const model = platformSettings.platform_gemini_model || 'gemini-3.5-flash';
+    creds = resolveAiCredentials(settings, platformSettings);
+  } else {
+    creds = resolveAiCredentials({ override_ai_provider: '' }, platformSettings);
+  }
+
+  if (creds.provider === 'gemini') {
+    if (!creds.gemini_api_key) {
+      throw new Error('No Gemini API key is set.');
+    }
     const { GoogleGenAI } = require('@google/genai');
-    const genAI = new GoogleGenAI({ apiKey: platformSettings.platform_gemini_api_key });
+    const genAI = new GoogleGenAI({ apiKey: creds.gemini_api_key });
     const response = await genAI.models.generateContent({
-      model,
+      model: creds.gemini_model,
       contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: test successful' }] }]
     });
-    return { ok: true, provider: 'gemini', model, sample: response.text };
+    return { ok: true, provider: 'gemini', model: creds.gemini_model, sample: response.text };
   }
 
-  if (!platformSettings.platform_openai_api_key) {
-    throw new Error('No OpenAI API key is set. Add one in the super admin panel.');
+  if (!creds.openai_api_key) {
+    throw new Error('No OpenAI API key is set.');
   }
-  const model = platformSettings.platform_openai_model || 'gpt-4o-mini';
-  const openai = new OpenAI({ apiKey: platformSettings.platform_openai_api_key });
+  const openai = new OpenAI({ apiKey: creds.openai_api_key });
   const completion = await openai.chat.completions.create({
-    model,
+    model: creds.openai_model,
     messages: [{ role: 'user', content: 'Reply with exactly: test successful' }]
   });
-  return { ok: true, provider: 'openai', model, sample: completion.choices[0].message.content };
+  return { ok: true, provider: 'openai', model: creds.openai_model, sample: completion.choices[0].message.content };
 }
 
-module.exports = { generateReply, testConnection, channelSetting };
+// ---------- one-shot freeform text (e.g. summarizing a scanned website) ----------
+// Same credential resolution as generateReply() (tenant override → universal
+// platform key), but a single standalone prompt with no conversation
+// history, tools, or product catalog — for utility calls that just need
+// "send this text to the AI, get text back."
+async function generateFreeformText(tenantId, prompt) {
+  const settings = await db.getSettings(tenantId);
+  const platformSettings = await db.getPlatformSettings();
+  const creds = resolveAiCredentials(settings, platformSettings);
+
+  if (creds.provider === 'gemini') {
+    if (!creds.gemini_api_key) throw new Error('No AI configured — set a Gemini API key in the super admin panel.');
+    const { GoogleGenAI } = require('@google/genai');
+    const genAI = new GoogleGenAI({ apiKey: creds.gemini_api_key });
+    const response = await genAI.models.generateContent({
+      model: creds.gemini_model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+    try {
+      const inputTokens = (response.usageMetadata && response.usageMetadata.promptTokenCount) || 0;
+      const outputTokens = (response.usageMetadata && response.usageMetadata.candidatesTokenCount) || 0;
+      const costUsd = estimateCostUsd('gemini', creds.gemini_model, inputTokens, outputTokens);
+      await db.recordAiUsage(tenantId, null, 'gemini', creds.gemini_model, inputTokens, outputTokens, costUsd, creds.usingOverride);
+    } catch (err) { console.error(`[ai] freeform cost logging failed for tenant ${tenantId}:`, err.message); }
+    return response.text.trim();
+  }
+
+  if (!creds.openai_api_key) throw new Error('No AI configured — set an OpenAI API key in the super admin panel.');
+  const openai = new OpenAI({ apiKey: creds.openai_api_key });
+  const completion = await openai.chat.completions.create({
+    model: creds.openai_model,
+    messages: [{ role: 'user', content: prompt }]
+  });
+  try {
+    const inputTokens = (completion.usage && completion.usage.prompt_tokens) || 0;
+    const outputTokens = (completion.usage && completion.usage.completion_tokens) || 0;
+    const costUsd = estimateCostUsd('openai', creds.openai_model, inputTokens, outputTokens);
+    await db.recordAiUsage(tenantId, null, 'openai', creds.openai_model, inputTokens, outputTokens, costUsd, creds.usingOverride);
+  } catch (err) { console.error(`[ai] freeform cost logging failed for tenant ${tenantId}:`, err.message); }
+  return completion.choices[0].message.content.trim();
+}
+
+module.exports = { generateReply, testConnection, channelSetting, resolveAiCredentials, generateFreeformText };

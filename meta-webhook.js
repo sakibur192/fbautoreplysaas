@@ -30,6 +30,8 @@ router.post('/', async (req, res) => {
     const body = req.body;
     if (body.object === 'page') {
       await handleFacebookEntries(body.entry || []);
+    } else if (body.object === 'instagram') {
+      await handleInstagramEntries(body.entry || []);
     } else if (body.object === 'whatsapp_business_account') {
       await handleWhatsappCloudEntries(body.entry || []);
     }
@@ -109,6 +111,82 @@ async function handleFacebookEntries(entries) {
   }
 }
 
+// ================= Instagram DMs =================
+// Instagram Business messaging rides on the same Meta App subscription and
+// the same Page Access Token as Messenger (the IG professional account must
+// be linked to the connected Page) — so tenant lookup and sending both
+// reuse the Facebook Page connection, just under a separate ig_enabled
+// toggle and its own conversation platform ('instagram').
+async function handleInstagramEntries(entries) {
+  for (const entry of entries) {
+    const pageId = entry.id;
+    const tenantId = await db.getTenantIdByFacebookPageId(pageId);
+    if (!tenantId) continue;
+
+    const tenant = await db.getTenantById(tenantId);
+    if (!db.isTenantActive(tenant)) continue;
+
+    const settings = await db.getSettings(tenantId);
+    if (settings.ig_enabled !== 'true') continue;
+
+    for (const event of entry.messaging || []) {
+      const senderId = event.sender && event.sender.id;
+      if (!senderId || !event.message || event.message.is_echo) continue;
+
+      const text = event.message.text || '';
+      const imageAttachment = (event.message.attachments || []).find((a) => a.type === 'image');
+      if (!text && !imageAttachment) continue;
+
+      let imageData = null;
+      if (imageAttachment && imageAttachment.payload && imageAttachment.payload.url) {
+        try {
+          imageData = await fetchPublicImageAsBase64(imageAttachment.payload.url);
+        } catch (err) {
+          console.error(`[instagram] tenant ${tenantId} image download failed:`, err.message);
+        }
+      }
+
+      const conversation = await db.getOrCreateConversation(tenantId, 'instagram', senderId, null);
+      await db.addMessage(conversation.id, 'in', 'user', text || '[Image]');
+      if (!conversation.ai_enabled) continue;
+
+      const usage = await db.getReplyUsage(tenantId);
+      if (usage.exceeded) {
+        const limitMsg = ai.channelSetting(settings, 'instagram', 'limit_reached_message');
+        try {
+          await humanDelay();
+          await sendFacebookMessage(settings.fb_page_access_token, senderId, limitMsg);
+          await db.addMessage(conversation.id, 'out', 'system', limitMsg);
+        } catch (err) {
+          console.error(`[instagram] tenant ${tenantId} limit-reached message failed:`, err.message);
+        }
+        continue;
+      }
+
+      try {
+        let reply = await ai.generateReply(tenantId, conversation.id, text, imageData, 'instagram');
+        if (settings.bot_disclosure_enabled !== 'false' && db.shouldShowDisclosure(conversation)) {
+          reply = `${settings.bot_disclosure_message}\n\n${reply}`;
+          await db.markDisclosureShown(conversation.id);
+        }
+        await humanDelay();
+        await sendFacebookMessage(settings.fb_page_access_token, senderId, reply);
+        await db.addMessage(conversation.id, 'out', 'ai', reply);
+      } catch (err) {
+        console.error(`[instagram] tenant ${tenantId} AI reply failed:`, err.message);
+        const fallbackMsg = ai.channelSetting(settings, 'instagram', 'fallback_message');
+        try {
+          await humanDelay();
+          await sendFacebookMessage(settings.fb_page_access_token, senderId, fallbackMsg);
+          await db.addMessage(conversation.id, 'out', 'system', fallbackMsg);
+        } catch (err2) {
+          console.error(`[instagram] tenant ${tenantId} fallback reply also failed:`, err2.message);
+        }
+      }
+    }
+  }
+}
+
 async function sendFacebookMessage(pageAccessToken, psid, text) {
   if (!pageAccessToken) throw new Error('Facebook Page Access Token is not set.');
   await axios.post(
@@ -133,7 +211,7 @@ async function handleWhatsappCloudEntries(entries) {
       if (!db.isTenantActive(tenant)) continue;
 
       const settings = await db.getSettings(tenantId);
-      if (settings.whatsapp_enabled !== 'true' || settings.whatsapp_mode !== 'cloud_api') continue;
+      if (settings.whatsapp_enabled !== 'true') continue;
 
       // Tenants connected via Embedded Signup have no token of their own —
       // sending uses the one platform-wide system user token instead. A

@@ -16,6 +16,17 @@ module.exports = {
   // Session secret — change this to a long random string
   SESSION_SECRET: 'change-this-to-a-long-random-string',
 
+  // Marks the login session cookie "Secure" (browser will only ever send it
+  // back over HTTPS). Leave this false until you've confirmed your real
+  // domain + HTTPS works end-to-end (Coolify's Let's Encrypt cert issued,
+  // site loads on https://) — turning it on before then, or if your proxy
+  // isn't forwarding X-Forwarded-Proto correctly, silently breaks every
+  // login with no clear error (the cookie just never gets set). Once
+  // you've confirmed HTTPS works, flip this to true for the extra
+  // protection — sessions already default to httpOnly + sameSite:'lax'
+  // either way, which covers the most common risks on its own.
+  FORCE_SECURE_COOKIES: false,
+
   // ---- YOUR (super admin) login — manages all tenants/payments ----
   SUPERADMIN_USERNAME: 'admin',
   SUPERADMIN_PASSWORD: 'change-this-password',
@@ -23,13 +34,13 @@ module.exports = {
   // PostgreSQL connection — use the host/port/user/password/database
   // Coolify's Postgres resource gives you (Coolify → your Postgres
   // resource → Connection Details).
-  DB: {
-    host: '76.13.223.236',
-    port: 5466,
-    user: 'postgres',
-    password: 'LaYpTAhiYayycvCiHA9PvZnr5yfFObOoh4T4SK52oM9Gtn4WbP6ORT8a388kYr0h',
-    database: 'postgres'
-  },
+DB: {
+  host: '201.18.212.48',
+  port: 5432,
+  user: 'postgres',
+  password: 'vKaOzUaxH0wq3yyB1ehGdSgWVEIh3dD6bvkaCkd40rpjesKEtN8lgbGvlAGay3O3',
+  database: 'postgres'
+},
 
   // ---- Facebook: ONE Meta App/webhook serves every tenant's Page ----
   // Set this in your Meta App's webhook config. Each tenant only

@@ -1,7 +1,7 @@
 {
   "name": "fb-wa-ai-bot",
   "version": "1.0.0",
-  "description": "AI auto-reply bot for Facebook Page Messenger and WhatsApp with an admin panel",
+  "description": "Multi-tenant SaaS AI auto-reply for Facebook Messenger, Instagram DMs, and WhatsApp",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,11 +11,10 @@
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
     "express-session": "^1.18.0",
+    "helmet": "^7.1.0",
     "openai": "^4.56.0",
-    "pg": "^8.12.0",
-    "qrcode": "^1.5.4",
-    "socket.io": "^4.7.5",
-    "whatsapp-web.js": "^1.26.0"
+    "pg": "^8.12.0"
   }
 }

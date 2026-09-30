@@ -20,7 +20,14 @@ router.get('/facebook/start', requireTenantSession, (req, res) => {
     return res.redirect('/admin?fb_error=' + encodeURIComponent('Facebook connect is not configured yet (missing FB_APP_ID).'));
   }
   const redirectUri = `${config.PUBLIC_BASE_URL}/api/connect/facebook/callback`;
-  const scope = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement'].join(',');
+  const scope = [
+    'pages_show_list',
+    'pages_messaging',
+    'pages_manage_metadata',
+    'pages_read_engagement',
+    'instagram_basic',
+    'instagram_manage_messages'
+  ].join(',');
   const authUrl =
     `https://www.facebook.com/v19.0/dialog/oauth` +
     `?client_id=${encodeURIComponent(config.FB_APP_ID)}` +
@@ -134,7 +141,6 @@ router.post('/whatsapp/embedded-signup/callback', requireTenantSession, async (r
     }
 
     await db.updateSettings(req.session.tenantId, {
-      whatsapp_mode: 'cloud_api',
       wa_cloud_phone_number_id: phone_number_id,
       wa_cloud_waba_id: waba_id,
       wa_cloud_display_number: display_phone_number || '',

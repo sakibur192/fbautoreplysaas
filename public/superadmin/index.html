@@ -130,17 +130,45 @@
       </div>
     </div>
 
+    <h2>AI Cost</h2>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Real $ cost of every AI reply, computed from each provider's own token counts — not an estimate.</p>
+      <div class="row">
+        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-today">—</div><div style="font-size:12px; color:#6b7280;">Today</div></div>
+        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-month">—</div><div style="font-size:12px; color:#6b7280;">This month</div></div>
+        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-total">—</div><div style="font-size:12px; color:#6b7280;">All time</div></div>
+      </div>
+      <h4 style="margin-top:20px;">By tenant</h4>
+      <table>
+        <thead><tr><th>Business</th><th>This month</th><th>All time</th></tr></thead>
+        <tbody id="cost-tenant-rows"></tbody>
+      </table>
+      <div id="cost-empty" class="empty" style="display:none;">No AI usage recorded yet.</div>
+    </div>
+
     <h2>Plans</h2>
     <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Packages tenants can subscribe to — reply limit, price, and how long an approved payment against it lasts (a "3 month" package extends a tenant 90 days per approved payment, etc). Both price and duration are yours to set and change any time.</p>
       <table>
-        <thead><tr><th>Name</th><th>Reply limit / mo</th><th>Price (BDT)</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Reply limit / cycle</th><th>Price (BDT)</th><th>Duration</th><th></th></tr></thead>
         <tbody id="plan-rows"></tbody>
       </table>
       <h4 style="margin-top:20px;">Add plan</h4>
       <div class="row">
-        <div class="col"><label>Name</label><input id="new-plan-name" type="text" placeholder="e.g. Starter" style="width:100%;" /></div>
-        <div class="col"><label>Reply limit / month</label><input id="new-plan-limit" type="number" placeholder="5000" style="width:100%;" /></div>
-        <div class="col"><label>Price (BDT / month)</label><input id="new-plan-price" type="number" placeholder="2000" style="width:100%;" /></div>
+        <div class="col"><label>Name</label><input id="new-plan-name" type="text" placeholder="e.g. Starter — 3 Month" style="width:100%;" /></div>
+        <div class="col"><label>Reply limit / cycle</label><input id="new-plan-limit" type="number" placeholder="5000" style="width:100%;" /></div>
+        <div class="col"><label>Price (BDT)</label><input id="new-plan-price" type="number" placeholder="2000" style="width:100%;" /></div>
+        <div class="col">
+          <label>Duration</label>
+          <select id="new-plan-duration" style="width:100%;" onchange="onNewPlanDurationChange()">
+            <option value="30">1 month</option>
+            <option value="90">3 months</option>
+            <option value="180">6 months</option>
+            <option value="365">1 year</option>
+            <option value="custom">Custom (days)</option>
+          </select>
+          <input id="new-plan-duration-custom" type="number" min="1" placeholder="e.g. 45 days" style="width:100%; display:none; margin-top:6px;" />
+        </div>
       </div>
       <div style="margin-top:12px;">
         <button onclick="addPlan()">Add Plan</button>
@@ -168,6 +196,50 @@
     <dl id="tenant-modal-body"></dl>
     <div style="margin-top:16px; text-align:right;">
       <button class="secondary" onclick="closeTenantModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="ai-override-backdrop" onclick="if(event.target===this) closeAiOverride()">
+  <div class="modal">
+    <h3 id="ai-override-title">AI key override</h3>
+    <p style="color:#6b7280; font-size:13px;">Leave "Use universal key" selected to keep billing this tenant's replies against your platform key. Only set a dedicated key here if this specific tenant needs their own.</p>
+
+    <div class="toggle-row">
+      <input type="radio" name="override-provider" id="override-provider-none" value="" onchange="onOverrideProviderChange()" />
+      <span>Use universal platform key</span>
+    </div>
+    <div class="toggle-row">
+      <input type="radio" name="override-provider" id="override-provider-openai" value="openai" onchange="onOverrideProviderChange()" />
+      <span>OpenAI (ChatGPT) — this tenant's own key</span>
+    </div>
+    <div class="toggle-row">
+      <input type="radio" name="override-provider" id="override-provider-gemini" value="gemini" onchange="onOverrideProviderChange()" />
+      <span>Google Gemini — this tenant's own key</span>
+    </div>
+
+    <div id="override-panel-openai" style="display:none;">
+      <label>OpenAI API Key <span id="override-openai-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+      <input id="override_openai_api_key" type="text" placeholder="sk-..." style="width:100%;" />
+      <label>Model</label>
+      <input id="override_openai_model" type="text" placeholder="gpt-4o-mini" style="width:100%;" />
+    </div>
+    <div id="override-panel-gemini" style="display:none;">
+      <label>Gemini API Key <span id="override-gemini-key-masked" style="font-weight:400;color:#6b7280;"></span></label>
+      <input id="override_gemini_api_key" type="text" placeholder="AIza..." style="width:100%;" />
+      <label>Model</label>
+      <input id="override_gemini_model" type="text" placeholder="gemini-3.5-flash" style="width:100%;" />
+    </div>
+
+    <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <button class="secondary" onclick="testTenantAi()">Test</button>
+        <span id="override-test-result" style="font-size:13px; margin-left:6px;"></span>
+      </div>
+      <div style="text-align:right;">
+        <button class="secondary" onclick="closeAiOverride()">Cancel</button>
+        <button onclick="saveAiOverride()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -200,9 +272,33 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   loadPlatformSettings();
+  loadCosts();
   loadPlans();
   loadPayments();
   loadTenants();
+}
+
+function fmtUsd(n) {
+  return '$' + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+async function loadCosts() {
+  const c = await api('/api/superadmin/costs');
+  document.getElementById('cost-today').textContent = fmtUsd(c.today_cost_usd);
+  document.getElementById('cost-month').textContent = fmtUsd(c.this_month_cost_usd);
+  document.getElementById('cost-total').textContent = fmtUsd(c.total_cost_usd);
+
+  const tbody = document.getElementById('cost-tenant-rows');
+  tbody.innerHTML = '';
+  document.getElementById('cost-empty').style.display = c.by_tenant.length ? 'none' : 'block';
+  c.by_tenant.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapeHtml(row.business_name) + '</td>' +
+      '<td>' + fmtUsd(row.this_month_cost_usd) + '</td>' +
+      '<td>' + fmtUsd(row.total_cost_usd) + '</td>';
+    tbody.appendChild(tr);
+  });
 }
 async function doLogin() {
   const username = document.getElementById('login-user').value;
@@ -281,6 +377,19 @@ async function testAiConnection() {
   }
 }
 
+function formatDuration(days) {
+  if (days === 30) return '1 month';
+  if (days === 90) return '3 months';
+  if (days === 180) return '6 months';
+  if (days === 365) return '1 year';
+  return days + ' days';
+}
+
+function onNewPlanDurationChange() {
+  const custom = document.getElementById('new-plan-duration').value === 'custom';
+  document.getElementById('new-plan-duration-custom').style.display = custom ? 'block' : 'none';
+}
+
 async function loadPlans() {
   const plans = await api('/api/superadmin/plans');
   const tbody = document.getElementById('plan-rows');
@@ -292,6 +401,7 @@ async function loadPlans() {
       '<td>' + escapeHtml(p.name) + (p.active ? '' : ' (inactive)') + '</td>' +
       '<td>' + p.reply_limit.toLocaleString() + '</td>' +
       '<td>৳' + p.price_bdt + '</td>' +
+      '<td>' + formatDuration(p.duration_days) + '</td>' +
       '<td>' + (p.active ? '<button class="danger" onclick="deactivatePlan(' + p.id + ')">Deactivate</button>' : '') + '</td>';
     tbody.appendChild(tr);
   });
@@ -301,11 +411,16 @@ async function addPlan() {
   const name = document.getElementById('new-plan-name').value.trim();
   const reply_limit = document.getElementById('new-plan-limit').value;
   const price_bdt = document.getElementById('new-plan-price').value;
-  if (!name || !reply_limit || !price_bdt) return;
-  await api('/api/superadmin/plans', { method: 'POST', body: JSON.stringify({ name, reply_limit, price_bdt }) });
+  const durationSelect = document.getElementById('new-plan-duration').value;
+  const duration_days = durationSelect === 'custom' ? document.getElementById('new-plan-duration-custom').value : durationSelect;
+  if (!name || !reply_limit || !price_bdt || !duration_days) return;
+  await api('/api/superadmin/plans', { method: 'POST', body: JSON.stringify({ name, reply_limit, price_bdt, duration_days }) });
   document.getElementById('new-plan-name').value = '';
   document.getElementById('new-plan-limit').value = '';
   document.getElementById('new-plan-price').value = '';
+  document.getElementById('new-plan-duration').value = '30';
+  document.getElementById('new-plan-duration-custom').value = '';
+  onNewPlanDurationChange();
   loadPlans();
   toast('Plan added');
 }
@@ -362,6 +477,7 @@ async function loadTenants() {
       '<td>' + new Date(t.trial_ends_at).toLocaleDateString() + '</td>' +
       '<td>' + (t.subscription_ends_at ? new Date(t.subscription_ends_at).toLocaleDateString() : '—') + '</td>' +
       '<td><button class="secondary" onclick="viewTenant(' + t.id + ')">View</button> ' +
+      '<button class="secondary" onclick="openAiOverride(' + t.id + ')">AI Key</button> ' +
       '<button class="secondary" onclick="impersonate(' + t.id + ')">Log in as</button> ' +
       '<button class="' + (t.suspended ? 'success' : 'danger') + '" onclick="toggleSuspend(' + t.id + ',' + (!t.suspended) + ')">' +
       (t.suspended ? 'Unsuspend' : 'Suspend') + '</button></td>' +
@@ -377,16 +493,23 @@ async function viewTenant(id) {
   const dl = document.getElementById('tenant-modal-body');
   const rows = [
     ['Email', d.tenant.email],
+    ['Phone', d.tenant.phone || '—'],
+    ['WhatsApp', d.tenant.whatsapp_number || '—'],
+    ['Address', d.tenant.address || '—'],
     ['Status', d.tenant.suspended ? 'Suspended' : (d.tenant.active ? 'Active' : 'Expired')],
-    ['Plan', d.plan ? d.plan.name + ' (৳' + d.plan.price_bdt + '/mo)' : 'None'],
+    ['Plan', d.plan ? d.plan.name + ' (৳' + d.plan.price_bdt + ' / ' + formatDuration(d.plan.duration_days) + ')' : 'None'],
     ['Usage', d.plan ? d.usage.used + ' / ' + d.usage.limit + ' replies' : d.usage.used + ' replies (unlimited)'],
     ['Reply mode', d.settings.reply_mode],
     ['Facebook enabled', d.settings.fb_enabled === 'true' ? 'Yes' : 'No'],
-    ['WhatsApp enabled', d.settings.whatsapp_enabled === 'true' ? 'Yes (' + d.settings.whatsapp_mode + ')' : 'No'],
+    ['Instagram enabled', d.settings.ig_enabled === 'true' ? 'Yes' : 'No'],
+    ['WhatsApp enabled', d.settings.whatsapp_enabled === 'true' ? 'Yes' : 'No'],
+    ['AI key', d.settings.using_ai_override ? 'Tenant-specific override' : 'Universal platform key'],
     ['Products', d.products_count],
     ['Orders', d.orders_count],
     ['Total AI replies', d.dashboard.total_ai_replies],
-    ['Conversations', d.dashboard.total_conversations]
+    ['Conversations', d.dashboard.total_conversations],
+    ['AI cost this month', fmtUsd(d.cost.this_month_cost_usd)],
+    ['AI cost all time', fmtUsd(d.cost.total_cost_usd)]
   ];
   dl.innerHTML = rows.map(([k, v]) => '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(String(v)) + '</dd>').join('');
   document.getElementById('tenant-modal-backdrop').classList.add('open');
@@ -404,6 +527,77 @@ async function extendTenant(id) {
   input.value = '';
   loadTenants();
   toast('Extended by ' + days + ' day(s)');
+}
+
+let currentOverrideTenantId = null;
+
+function onOverrideProviderChange() {
+  const provider = document.querySelector('input[name="override-provider"]:checked').value;
+  document.getElementById('override-panel-openai').style.display = provider === 'openai' ? 'block' : 'none';
+  document.getElementById('override-panel-gemini').style.display = provider === 'gemini' ? 'block' : 'none';
+}
+
+async function openAiOverride(id) {
+  currentOverrideTenantId = id;
+  const tenant = tenantsCache.find(t => t.id === id);
+  document.getElementById('ai-override-title').textContent = 'AI key override — ' + (tenant ? tenant.business_name : '');
+  document.getElementById('override-test-result').textContent = '';
+  document.getElementById('override_openai_api_key').value = '';
+  document.getElementById('override_gemini_api_key').value = '';
+
+  const s = await api('/api/superadmin/tenants/' + id + '/ai-override');
+  document.getElementById('override_openai_model').value = s.override_openai_model || '';
+  document.getElementById('override_gemini_model').value = s.override_gemini_model || '';
+  document.getElementById('override-openai-key-masked').textContent = s.override_openai_api_key_masked ? '(currently: ' + s.override_openai_api_key_masked + ')' : '(not set)';
+  document.getElementById('override-gemini-key-masked').textContent = s.override_gemini_api_key_masked ? '(currently: ' + s.override_gemini_api_key_masked + ')' : '(not set)';
+
+  const provider = s.override_ai_provider || '';
+  document.getElementById('override-provider-none').checked = provider === '';
+  document.getElementById('override-provider-openai').checked = provider === 'openai';
+  document.getElementById('override-provider-gemini').checked = provider === 'gemini';
+  onOverrideProviderChange();
+
+  document.getElementById('ai-override-backdrop').classList.add('open');
+}
+
+function closeAiOverride() {
+  document.getElementById('ai-override-backdrop').classList.remove('open');
+  currentOverrideTenantId = null;
+}
+
+async function saveAiOverride() {
+  const provider = document.querySelector('input[name="override-provider"]:checked').value;
+  const body = {
+    override_ai_provider: provider,
+    override_openai_api_key: document.getElementById('override_openai_api_key').value,
+    override_openai_model: document.getElementById('override_openai_model').value,
+    override_gemini_api_key: document.getElementById('override_gemini_api_key').value,
+    override_gemini_model: document.getElementById('override_gemini_model').value
+  };
+  await api('/api/superadmin/tenants/' + currentOverrideTenantId + '/ai-override', { method: 'POST', body: JSON.stringify(body) });
+  toast('AI key updated');
+  closeAiOverride();
+  loadTenants();
+}
+
+async function testTenantAi() {
+  const box = document.getElementById('override-test-result');
+  box.style.color = '#6b7280';
+  box.textContent = 'Testing...';
+  try {
+    const res = await fetch('/api/superadmin/tenants/' + currentOverrideTenantId + '/test-ai', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      box.style.color = '#166534';
+      box.textContent = '✓ Working (' + data.provider + ', ' + data.model + ')';
+    } else {
+      box.style.color = '#991b1b';
+      box.textContent = '✗ ' + (data.error || 'Unknown error');
+    }
+  } catch (e) {
+    box.style.color = '#991b1b';
+    box.textContent = '✗ Request failed: ' + e.message;
+  }
 }
 
 async function impersonate(id) {

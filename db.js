@@ -6,7 +6,10 @@ const pool = new Pool(config.DB);
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tenants (
   id SERIAL PRIMARY KEY,
-  business_name TEXT NOT NULL,
+  business_name TEXT NOT NULL, -- doubles as the signup "Name" field
+  phone TEXT,
+  whatsapp_number TEXT,
+  address TEXT, -- optional physical address, edited from the tenant's Profile tab
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   suspended BOOLEAN DEFAULT false,
@@ -17,14 +20,19 @@ CREATE TABLE IF NOT EXISTS tenants (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Reply-limit plans you (super admin) define — e.g. "5,000 replies / 2,000 BDT".
--- Tenants pick and switch between these themselves; a plan's price is what
--- you expect them to pay by bKash, same manual-approval flow as before.
+-- Reply-limit + duration plans you (super admin) define — e.g. "5,000
+-- replies / 2,000 BDT / 3 months". Tenants pick and switch between these
+-- themselves; a plan's price is what you expect them to pay by bKash, same
+-- manual-approval flow as before. duration_days is how long an approved
+-- payment against this plan extends the tenant's subscription for (30 for
+-- a monthly package, 90/180/365 for quarterly/half-yearly/yearly, or any
+-- custom number of days you set).
 CREATE TABLE IF NOT EXISTS plans (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   reply_limit INTEGER NOT NULL,
   price_bdt INTEGER NOT NULL,
+  duration_days INTEGER NOT NULL DEFAULT 30,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -57,7 +65,7 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 CREATE TABLE IF NOT EXISTS conversations (
   id SERIAL PRIMARY KEY,
   tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
-  platform TEXT NOT NULL,           -- 'facebook' or 'whatsapp'
+  platform TEXT NOT NULL,           -- 'facebook', 'instagram', or 'whatsapp'
   contact_id TEXT NOT NULL,
   contact_name TEXT,
   ai_enabled BOOLEAN DEFAULT true,
@@ -82,6 +90,10 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   price TEXT,
   description TEXT,
+  image_url TEXT,
+  category TEXT,
+  sku TEXT,
+  stock_quantity INTEGER, -- null = not tracked / always in stock
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -107,6 +119,25 @@ CREATE INDEX IF NOT EXISTS idx_products_tenant ON products(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_orders_tenant ON orders(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_orders_conversation ON orders(conversation_id);
+
+-- Real $ cost of every AI call, captured from the provider's own token
+-- counts (not estimated from text length) so per-tenant and platform-wide
+-- cost reporting is accurate, not guessed.
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id SERIAL PRIMARY KEY,
+  tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+  conversation_id INTEGER REFERENCES conversations(id) ON DELETE SET NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+  used_override BOOLEAN NOT NULL DEFAULT false, -- true = billed against tenant's own override key
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_tenant ON ai_usage(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at);
 `;
 
 const DEFAULT_SETTINGS = {
@@ -117,13 +148,16 @@ const DEFAULT_SETTINGS = {
   bot_disclosure_enabled: 'true',
   bot_disclosure_message: "🤖 You're chatting with an automated assistant. Reply anytime to reach our team directly.",
 
-  // 'unified' = the three fields above apply to both channels.
-  // 'separate' = each channel uses its own fb_*/wa_* field below, falling
-  // back to the unified value above when its own field is left blank.
+  // 'unified' = the three fields above apply to all channels.
+  // 'separate' = each channel uses its own fb_*/ig_*/wa_* field below,
+  // falling back to the unified value above when its own field is blank.
   reply_mode: 'unified',
   fb_system_prompt: '',
   fb_order_tools_enabled: '',
   fb_fallback_message: '',
+  ig_system_prompt: '',
+  ig_order_tools_enabled: '',
+  ig_fallback_message: '',
   wa_system_prompt: '',
   wa_order_tools_enabled: '',
   wa_fallback_message: '',
@@ -132,12 +166,35 @@ const DEFAULT_SETTINGS = {
   fb_page_name: '', // for display only — "Connected: <name>" instead of a raw ID
   fb_page_access_token: '',
   fb_enabled: 'false',
+
+  // Instagram DMs ride on the same Page connection/token as Facebook
+  // Messenger (Meta requires the Page's Instagram professional account to
+  // be linked) — there's no separate "connect" step, just a toggle.
+  ig_enabled: 'false',
+
   whatsapp_enabled: 'true',
-  whatsapp_mode: 'qr', // 'qr' (whatsapp-web.js) or 'cloud_api' (official Meta API)
   wa_cloud_phone_number_id: '',
   wa_cloud_display_number: '', // for display only
   wa_cloud_waba_id: '',
-  wa_cloud_access_token: '' // only used if a tenant did their own separate Meta App setup instead of Embedded Signup
+  wa_cloud_access_token: '', // only used if a tenant did their own separate Meta App setup instead of Embedded Signup
+
+  // Business website the AI can learn from. website_info is the AI-written
+  // summary saved after a "Scan Website" — freely editable afterward like
+  // any other setting, and fed into the AI's system prompt alongside the
+  // product catalog so it can answer general questions about the business.
+  website_url: '',
+  website_info: '',
+
+  // ---- Super-admin-only: per-tenant AI key override ----
+  // Never shown or editable from the tenant's own panel — set only via
+  // the super admin "AI Key" modal. When override_ai_provider is blank,
+  // this tenant's replies use the universal platform key (see
+  // resolveAiCredentials() in ai.js).
+  override_ai_provider: '', // '' (use universal), 'openai', or 'gemini'
+  override_openai_api_key: '',
+  override_openai_model: '',
+  override_gemini_api_key: '',
+  override_gemini_model: ''
 };
 
 const DEFAULT_PLATFORM_SETTINGS = {
@@ -155,8 +212,26 @@ const DEFAULT_PLATFORM_SETTINGS = {
   platform_wa_system_user_token: ''
 };
 
+// Columns added after this app was first deployed. CREATE TABLE IF NOT
+// EXISTS (above) only helps a brand-new database — a live production
+// database already has these tables, so new columns need to be added to
+// them explicitly. Each line is safe to run every time the app boots.
+const MIGRATIONS = [
+  `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS phone TEXT`,
+  `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_number TEXT`,
+  `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS address TEXT`,
+  `ALTER TABLE plans ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 30`,
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT`,
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT`,
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS sku TEXT`,
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantity INTEGER`
+];
+
 async function init() {
   await pool.query(SCHEMA);
+  for (const statement of MIGRATIONS) {
+    await pool.query(statement);
+  }
   for (const [key, value] of Object.entries(DEFAULT_PLATFORM_SETTINGS)) {
     await pool.query(
       `INSERT INTO platform_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
@@ -184,13 +259,13 @@ async function updatePlatformSettings(obj) {
 }
 
 // ---------- tenants ----------
-async function createTenant(businessName, email, passwordHash, trialDays) {
+async function createTenant(businessName, phone, whatsappNumber, email, passwordHash, trialDays) {
   const days = trialDays !== undefined && trialDays !== null ? trialDays : config.TRIAL_DAYS;
   const trialEndsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   const { rows } = await pool.query(
-    `INSERT INTO tenants (business_name, email, password_hash, trial_ends_at)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [businessName, email, passwordHash, trialEndsAt]
+    `INSERT INTO tenants (business_name, phone, whatsapp_number, email, password_hash, trial_ends_at)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [businessName, phone || null, whatsappNumber || null, email, passwordHash, trialEndsAt]
   );
   const tenant = rows[0];
   // seed default settings for the new tenant
@@ -232,6 +307,22 @@ async function extendSubscription(tenantId, days) {
   return newEnd;
 }
 
+// Tenant-editable profile fields — name, phone, WhatsApp number, and an
+// optional physical address. Email and password are changed separately
+// (email isn't editable here at all, to keep login identity stable;
+// password goes through updateTenantPassword() below with its own check).
+async function updateTenantProfile(tenantId, { business_name, phone, whatsapp_number, address }) {
+  const { rows } = await pool.query(
+    `UPDATE tenants SET business_name = $1, phone = $2, whatsapp_number = $3, address = $4 WHERE id = $5 RETURNING *`,
+    [business_name, phone || null, whatsapp_number || null, address || null, tenantId]
+  );
+  return rows[0];
+}
+
+async function updateTenantPassword(tenantId, passwordHash) {
+  await pool.query('UPDATE tenants SET password_hash = $1 WHERE id = $2', [passwordHash, tenantId]);
+}
+
 // ---------- plans ----------
 async function listPlans(activeOnly) {
   const { rows } = await pool.query(
@@ -248,18 +339,18 @@ async function getPlanById(id) {
   return rows[0] || null;
 }
 
-async function createPlan(name, replyLimit, priceBdt) {
+async function createPlan(name, replyLimit, priceBdt, durationDays) {
   const { rows } = await pool.query(
-    `INSERT INTO plans (name, reply_limit, price_bdt) VALUES ($1, $2, $3) RETURNING *`,
-    [name, replyLimit, priceBdt]
+    `INSERT INTO plans (name, reply_limit, price_bdt, duration_days) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [name, replyLimit, priceBdt, durationDays || 30]
   );
   return rows[0];
 }
 
-async function updatePlan(id, name, replyLimit, priceBdt) {
+async function updatePlan(id, name, replyLimit, priceBdt, durationDays) {
   await pool.query(
-    `UPDATE plans SET name = $1, reply_limit = $2, price_bdt = $3 WHERE id = $4`,
-    [name, replyLimit, priceBdt, id]
+    `UPDATE plans SET name = $1, reply_limit = $2, price_bdt = $3, duration_days = $4 WHERE id = $5`,
+    [name, replyLimit, priceBdt, durationDays || 30, id]
   );
 }
 
@@ -549,7 +640,7 @@ async function getDashboardStats(tenantId) {
     [tenantId]
   );
 
-  const conversationsByPlatform = { facebook: 0, whatsapp: 0 };
+  const conversationsByPlatform = { facebook: 0, instagram: 0, whatsapp: 0 };
   for (const row of convByPlatformRes.rows) conversationsByPlatform[row.platform] = row.count;
 
   const ordersByStatus = { confirmed: 0, paid: 0, cancelled: 0 };
@@ -571,23 +662,84 @@ async function listProducts(tenantId) {
   return rows;
 }
 
-async function addProduct(tenantId, name, price, description) {
+async function addProduct(tenantId, name, price, description, imageUrl, category, sku, stockQuantity) {
   const { rows } = await pool.query(
-    `INSERT INTO products (tenant_id, name, price, description) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [tenantId, name, price || null, description || null]
+    `INSERT INTO products (tenant_id, name, price, description, image_url, category, sku, stock_quantity)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [tenantId, name, price || null, description || null, imageUrl || null, category || null, sku || null, stockQuantity === '' || stockQuantity === undefined ? null : stockQuantity]
   );
   return rows[0];
 }
 
-async function updateProduct(tenantId, id, name, price, description) {
+async function updateProduct(tenantId, id, name, price, description, imageUrl, category, sku, stockQuantity) {
   await pool.query(
-    `UPDATE products SET name = $1, price = $2, description = $3 WHERE id = $4 AND tenant_id = $5`,
-    [name, price || null, description || null, id, tenantId]
+    `UPDATE products SET name = $1, price = $2, description = $3, image_url = $4, category = $5, sku = $6, stock_quantity = $7
+     WHERE id = $8 AND tenant_id = $9`,
+    [name, price || null, description || null, imageUrl || null, category || null, sku || null, stockQuantity === '' || stockQuantity === undefined ? null : stockQuantity, id, tenantId]
   );
 }
 
 async function deleteProduct(tenantId, id) {
   await pool.query('DELETE FROM products WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+}
+
+// ---------- AI cost tracking ----------
+async function recordAiUsage(tenantId, conversationId, provider, model, inputTokens, outputTokens, costUsd, usedOverride) {
+  await pool.query(
+    `INSERT INTO ai_usage (tenant_id, conversation_id, provider, model, input_tokens, output_tokens, cost_usd, used_override)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [tenantId, conversationId, provider, model, inputTokens || 0, outputTokens || 0, costUsd || 0, !!usedOverride]
+  );
+}
+
+async function getTenantCostSummary(tenantId) {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const totalRes = await pool.query(
+    `SELECT COALESCE(SUM(cost_usd), 0)::float AS cost, COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens
+     FROM ai_usage WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  const monthRes = await pool.query(
+    `SELECT COALESCE(SUM(cost_usd), 0)::float AS cost FROM ai_usage WHERE tenant_id = $1 AND created_at >= $2`,
+    [tenantId, startOfMonth]
+  );
+  return {
+    total_cost_usd: totalRes.rows[0].cost,
+    total_tokens: totalRes.rows[0].tokens,
+    this_month_cost_usd: monthRes.rows[0].cost
+  };
+}
+
+async function getPlatformCostSummary() {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const totalRes = await pool.query(`SELECT COALESCE(SUM(cost_usd), 0)::float AS cost FROM ai_usage`);
+  const todayRes = await pool.query(`SELECT COALESCE(SUM(cost_usd), 0)::float AS cost FROM ai_usage WHERE created_at >= $1`, [startOfToday]);
+  const monthRes = await pool.query(`SELECT COALESCE(SUM(cost_usd), 0)::float AS cost FROM ai_usage WHERE created_at >= $1`, [startOfMonth]);
+
+  const byTenantRes = await pool.query(
+    `SELECT ai_usage.tenant_id, tenants.business_name,
+            COALESCE(SUM(ai_usage.cost_usd), 0)::float AS total_cost_usd,
+            COALESCE(SUM(CASE WHEN ai_usage.created_at >= $1 THEN ai_usage.cost_usd ELSE 0 END), 0)::float AS this_month_cost_usd
+     FROM ai_usage JOIN tenants ON tenants.id = ai_usage.tenant_id
+     GROUP BY ai_usage.tenant_id, tenants.business_name
+     ORDER BY total_cost_usd DESC`,
+    [startOfMonth]
+  );
+
+  return {
+    total_cost_usd: totalRes.rows[0].cost,
+    today_cost_usd: todayRes.rows[0].cost,
+    this_month_cost_usd: monthRes.rows[0].cost,
+    by_tenant: byTenantRes.rows
+  };
 }
 
 module.exports = {
@@ -601,6 +753,8 @@ module.exports = {
   listTenants,
   setTenantSuspended,
   extendSubscription,
+  updateTenantProfile,
+  updateTenantPassword,
   isTenantActive,
   listPlans,
   getPlanById,
@@ -637,5 +791,8 @@ module.exports = {
   recordPayment,
   listOrders,
   updateOrderStatus,
-  getDashboardStats
+  getDashboardStats,
+  recordAiUsage,
+  getTenantCostSummary,
+  getPlatformCostSummary
 };
