@@ -34,7 +34,7 @@ module.exports = {
   // PostgreSQL connection — use the host/port/user/password/database
   // Coolify's Postgres resource gives you (Coolify → your Postgres
   // resource → Connection Details).
-DB: {
+ DB: {
   host: '201.18.212.48',
   port: 5432,
   user: 'postgres',

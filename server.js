@@ -5,6 +5,8 @@ const session = require('express-session');
 const http = require('http');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const multer = require('multer');
 
 const config = require('./config');
 const db = require('./db');
@@ -28,6 +30,31 @@ app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 
 app.use(express.json({ limit: '2mb' }));
+
+// ---- Image uploads (logo, favicon, hero slides, blog covers, avatars) ----
+// Super-admin-only (enforced per-route below). Stored on local disk under
+// public/uploads and served statically — fine for a single-VPS Coolify
+// deploy; if you ever move to multiple replicas/containers, this would
+// need to move to shared/object storage instead, since local disk isn't
+// shared between replicas.
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+      const safeExt = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '').slice(0, 10) || '.png';
+      cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + safeExt);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (!/^image\//.test(file.mimetype)) return cb(new Error('Only image files are allowed'));
+    cb(null, true);
+  }
+});
+app.use('/uploads', express.static(uploadsDir));
+app.use('/assets', express.static(path.join(__dirname, 'public', 'landing', 'assets')));
 
 app.use(session({
   secret: config.SESSION_SECRET,
@@ -139,6 +166,34 @@ app.get('/api/session', async (req, res) => {
   });
 });
 
+// ================= Public marketing site (read-only) =================
+// Everything the landing page needs to render itself — branding, hero
+// copy/slider, testimonials, and a blog summary — pulled from what's set
+// in /superadmin → Website. No auth: this is the public site.
+app.get('/api/site-content', async (req, res) => {
+  const content = await db.getSiteContent();
+  const heroSlides = await db.listHeroSlides(true);
+  const testimonials = await db.listTestimonials(true);
+  const posts = (await db.listBlogPosts(true)).slice(0, 3).map(p => ({
+    title: p.title, slug: p.slug, excerpt: p.excerpt, cover_image_url: p.cover_image_url, created_at: p.created_at
+  }));
+  res.json({ ...content, hero_slides: heroSlides, testimonials, recent_posts: posts });
+});
+app.get('/api/testimonials', async (req, res) => {
+  res.json(await db.listTestimonials(true));
+});
+app.get('/api/blog', async (req, res) => {
+  const posts = (await db.listBlogPosts(true)).map(p => ({
+    title: p.title, slug: p.slug, excerpt: p.excerpt, cover_image_url: p.cover_image_url, created_at: p.created_at
+  }));
+  res.json(posts);
+});
+app.get('/api/blog/:slug', async (req, res) => {
+  const post = await db.getBlogPostBySlug(req.params.slug);
+  if (!post || !post.published) return res.status(404).json({ error: 'Not found' });
+  res.json(post);
+});
+
 // ================= Billing (tenant side) =================
 app.get('/api/billing', requireTenant, async (req, res) => {
   const tenant = await db.getTenantById(req.session.tenantId);
@@ -157,13 +212,46 @@ app.get('/api/billing', requireTenant, async (req, res) => {
   });
 });
 
+// Checks a coupon against the tenant's current plan price without
+// consuming it — used to show the discounted amount before they pay.
+app.post('/api/billing/validate-coupon', requireTenant, async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Enter a coupon code' });
+  const usage = await db.getReplyUsage(req.session.tenantId);
+  const basePrice = usage.plan ? usage.plan.price_bdt : config.PRICE_BDT;
+  const coupon = await db.getCouponByCode(code);
+  if (!coupon) return res.status(404).json({ error: 'That coupon code was not found' });
+  try {
+    const { discount, finalPrice } = db.computeCouponDiscount(coupon, basePrice);
+    res.json({ valid: true, base_price: basePrice, discount, final_price: finalPrice });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/billing/submit', requireTenant, async (req, res) => {
-  const { trx_id, amount } = req.body;
+  const { trx_id, amount, coupon_code } = req.body;
   if (!trx_id) return res.status(400).json({ error: 'Transaction ID is required' });
   const tenant = await db.getTenantById(req.session.tenantId);
   const usage = await db.getReplyUsage(req.session.tenantId);
-  const defaultAmount = usage.plan ? String(usage.plan.price_bdt) : String(config.PRICE_BDT);
-  const payment = await db.submitPayment(req.session.tenantId, trx_id.trim(), amount || defaultAmount);
+  const basePrice = usage.plan ? usage.plan.price_bdt : config.PRICE_BDT;
+  let finalAmount = amount || String(basePrice);
+  let discountAmount = null;
+  let appliedCouponCode = null;
+  if (coupon_code) {
+    const coupon = await db.getCouponByCode(coupon_code);
+    if (!coupon) return res.status(404).json({ error: 'That coupon code was not found' });
+    try {
+      const { discount, finalPrice } = db.computeCouponDiscount(coupon, basePrice);
+      finalAmount = String(finalPrice);
+      discountAmount = String(discount);
+      appliedCouponCode = coupon.code;
+      await db.incrementCouponUsage(coupon.id); // consumed at submission — see coupons table note on the manual-billing trust model
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+  const payment = await db.submitPayment(req.session.tenantId, trx_id.trim(), finalAmount, appliedCouponCode, discountAmount);
   res.json(payment);
 });
 
@@ -493,6 +581,134 @@ app.post('/api/superadmin/plans/:id/deactivate', requireSuperAdmin, async (req, 
   res.json({ ok: true });
 });
 
+// ================= Website (public marketing site) — super admin controls =================
+// Everything here drives the public landing page (logo, favicon, colors,
+// Meta Pixel, hero copy/slider, blog, testimonials) plus discount coupons
+// used at billing time. Public read-only versions of the same data are
+// exposed further down for the landing page itself to fetch.
+
+app.post('/api/superadmin/upload', requireSuperAdmin, (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+    if (!req.file) return res.status(400).json({ error: 'No file received' });
+    res.json({ ok: true, url: '/uploads/' + req.file.filename });
+  });
+});
+
+app.get('/api/superadmin/site-content', requireSuperAdmin, async (req, res) => {
+  res.json(await db.getSiteContent());
+});
+app.post('/api/superadmin/site-content', requireSuperAdmin, async (req, res) => {
+  const allowed = [
+    'logo_url', 'favicon_url', 'meta_pixel_id', 'primary_color', 'accent_color',
+    'hero_headline', 'hero_subheadline', 'hero_cta_label', 'hero_cta_secondary_label',
+    'steps_headline', 'step1_title', 'step1_body', 'step2_title', 'step2_body', 'step3_title', 'step3_body',
+    'pricing_note', 'footer_text'
+  ];
+  const update = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) update[key] = req.body[key];
+  }
+  const content = await db.updateSiteContent(update);
+  res.json({ ok: true, content });
+});
+
+// ---- Hero slider ----
+app.get('/api/superadmin/hero-slides', requireSuperAdmin, async (req, res) => {
+  res.json(await db.listHeroSlides(false));
+});
+app.post('/api/superadmin/hero-slides', requireSuperAdmin, async (req, res) => {
+  res.json(await db.createHeroSlide(req.body));
+});
+app.put('/api/superadmin/hero-slides/:id', requireSuperAdmin, async (req, res) => {
+  await db.updateHeroSlide(req.params.id, req.body);
+  res.json({ ok: true });
+});
+app.delete('/api/superadmin/hero-slides/:id', requireSuperAdmin, async (req, res) => {
+  await db.deleteHeroSlide(req.params.id);
+  res.json({ ok: true });
+});
+
+// ---- Blog ----
+function slugify(title) {
+  return String(title).toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 80) || 'post';
+}
+app.get('/api/superadmin/blog', requireSuperAdmin, async (req, res) => {
+  res.json(await db.listBlogPosts(false));
+});
+app.post('/api/superadmin/blog', requireSuperAdmin, async (req, res) => {
+  const { title, cover_image_url, excerpt, content, published } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title is required' });
+  let slug = slugify(req.body.slug || title);
+  // Ensure uniqueness by appending a short suffix if the slug's taken.
+  let candidate = slug, n = 1;
+  while (await db.getBlogPostBySlug(candidate)) { candidate = slug + '-' + (++n); }
+  const post = await db.createBlogPost({ title, slug: candidate, cover_image_url, excerpt, content, published });
+  res.json(post);
+});
+app.put('/api/superadmin/blog/:id', requireSuperAdmin, async (req, res) => {
+  const existing = await db.getBlogPostById(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const { title, cover_image_url, excerpt, content, published } = req.body;
+  let slug = existing.slug;
+  if (req.body.slug) slug = slugify(req.body.slug);
+  await db.updateBlogPost(req.params.id, { title: title || existing.title, slug, cover_image_url, excerpt, content, published });
+  res.json({ ok: true });
+});
+app.delete('/api/superadmin/blog/:id', requireSuperAdmin, async (req, res) => {
+  await db.deleteBlogPost(req.params.id);
+  res.json({ ok: true });
+});
+
+// ---- Testimonials ----
+app.get('/api/superadmin/testimonials', requireSuperAdmin, async (req, res) => {
+  res.json(await db.listTestimonials(false));
+});
+app.post('/api/superadmin/testimonials', requireSuperAdmin, async (req, res) => {
+  const { name, quote } = req.body;
+  if (!name || !quote) return res.status(400).json({ error: 'Name and quote are required' });
+  res.json(await db.createTestimonial(req.body));
+});
+app.put('/api/superadmin/testimonials/:id', requireSuperAdmin, async (req, res) => {
+  await db.updateTestimonial(req.params.id, req.body);
+  res.json({ ok: true });
+});
+app.delete('/api/superadmin/testimonials/:id', requireSuperAdmin, async (req, res) => {
+  await db.deleteTestimonial(req.params.id);
+  res.json({ ok: true });
+});
+
+// ---- Coupons ----
+app.get('/api/superadmin/coupons', requireSuperAdmin, async (req, res) => {
+  res.json(await db.listCoupons());
+});
+app.post('/api/superadmin/coupons', requireSuperAdmin, async (req, res) => {
+  const { code, discount_type, discount_value, max_uses, expires_at } = req.body;
+  if (!code || !discount_value) return res.status(400).json({ error: 'Code and discount value are required' });
+  if (!['percent', 'flat'].includes(discount_type)) return res.status(400).json({ error: 'discount_type must be percent or flat' });
+  try {
+    const coupon = await db.createCoupon({
+      code, discount_type, discount_value: parseFloat(discount_value),
+      max_uses: max_uses ? parseInt(max_uses, 10) : null,
+      expires_at: expires_at || null
+    });
+    res.json(coupon);
+  } catch (err) {
+    res.status(400).json({ error: err.message.includes('duplicate') ? 'That coupon code already exists' : err.message });
+  }
+});
+app.post('/api/superadmin/coupons/:id/toggle', requireSuperAdmin, async (req, res) => {
+  await db.updateCoupon(req.params.id, { active: !!req.body.active });
+  res.json({ ok: true });
+});
+app.delete('/api/superadmin/coupons/:id', requireSuperAdmin, async (req, res) => {
+  await db.deleteCoupon(req.params.id);
+  res.json({ ok: true });
+});
+
 // Tenant detail view for super admin — settings summary + usage, read-only.
 app.get('/api/superadmin/tenants/:id/details', requireSuperAdmin, async (req, res) => {
   const tenant = await db.getTenantById(req.params.id);
@@ -610,6 +826,11 @@ app.post('/api/superadmin/exit-impersonation', requireSuperAdmin, (req, res) => 
 // ================= Static sites =================
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/superadmin', express.static(path.join(__dirname, 'public/superadmin')));
+// Blog list/post pages are static HTML that fetch their content from the
+// API above — these explicit routes exist so /blog/some-post-slug resolves
+// to that page (static file serving alone can't match a path parameter).
+app.get('/blog', (req, res) => res.sendFile(path.join(__dirname, 'public/landing/blog.html')));
+app.get('/blog/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public/landing/blog-post.html')));
 app.use('/', express.static(path.join(__dirname, 'public/landing')));
 
 // ================= Boot =================

@@ -34,7 +34,7 @@ async function scanWebsite(tenantId, rawUrl) {
     const res = await axios.get(url, {
       timeout: 15000,
       maxContentLength: MAX_HTML_BYTES,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; UttorAI-WebsiteScan/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BaybexAI-WebsiteScan/1.0)' },
       validateStatus: (s) => s >= 200 && s < 400
     });
     html = String(res.data);

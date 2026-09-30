@@ -454,6 +454,12 @@
 
         <h4 style="margin-top:20px;">Renew / Pay</h4>
         <p id="billing-instructions"></p>
+        <label>Have a coupon code?</label>
+        <div style="display:flex; gap:8px;">
+          <input id="billing-coupon" type="text" placeholder="e.g. EID2026" style="text-transform:uppercase; flex:1;" />
+          <button class="btn secondary" type="button" onclick="applyCoupon()">Apply</button>
+        </div>
+        <div id="billing-coupon-result" style="font-size:13px; margin-top:6px;"></div>
         <label>bKash Transaction ID</label>
         <input id="billing-trxid" type="text" placeholder="e.g. 8N7A6B5C4D" />
         <div style="margin-top:12px;">
@@ -1154,11 +1160,33 @@ async function switchPlan(planId) {
   toast('Plan updated');
 }
 
+async function applyCoupon() {
+  const code = document.getElementById('billing-coupon').value.trim();
+  const box = document.getElementById('billing-coupon-result');
+  if (!code) { box.textContent = ''; appliedCouponCode = null; return; }
+  const res = await fetch('/api/billing/validate-coupon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+  const data = await res.json();
+  if (!res.ok) {
+    box.style.color = '#dc2626';
+    box.textContent = data.error || 'Invalid coupon';
+    appliedCouponCode = null;
+    return;
+  }
+  appliedCouponCode = code;
+  box.style.color = '#16a34a';
+  box.textContent = '✓ ' + data.discount + ' BDT off — pay ৳' + data.final_price + ' instead of ৳' + data.base_price;
+}
+
+let appliedCouponCode = null;
+
 async function submitPayment() {
   const trx_id = document.getElementById('billing-trxid').value.trim();
   if (!trx_id) return;
-  await api('/api/billing/submit', { method: 'POST', body: JSON.stringify({ trx_id }) });
+  await api('/api/billing/submit', { method: 'POST', body: JSON.stringify({ trx_id, coupon_code: appliedCouponCode || undefined }) });
   document.getElementById('billing-trxid').value = '';
+  document.getElementById('billing-coupon').value = '';
+  document.getElementById('billing-coupon-result').textContent = '';
+  appliedCouponCode = null;
   toast('Payment submitted — pending approval');
   loadBilling();
 }

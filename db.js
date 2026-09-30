@@ -42,9 +42,69 @@ CREATE TABLE IF NOT EXISTS payments (
   tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
   trx_id TEXT NOT NULL,
   amount TEXT,
+  coupon_code TEXT, -- coupon the tenant applied when submitting, if any (record-keeping only — see coupons table)
+  discount_amount TEXT, -- BDT amount the coupon took off, computed at submit time
   status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
   submitted_at TIMESTAMPTZ DEFAULT now(),
   decided_at TIMESTAMPTZ
+);
+
+-- Marketing-site slider slides on the public landing page — fully
+-- super-admin-controlled, rendered in sort_order.
+CREATE TABLE IF NOT EXISTS hero_slides (
+  id SERIAL PRIMARY KEY,
+  image_url TEXT,
+  headline TEXT,
+  subheadline TEXT,
+  cta_label TEXT,
+  cta_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Blog posts for the public marketing site.
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  cover_image_url TEXT,
+  excerpt TEXT,
+  content TEXT,
+  published BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Customer reviews/testimonials shown on the landing page.
+CREATE TABLE IF NOT EXISTS testimonials (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT,
+  avatar_url TEXT,
+  quote TEXT NOT NULL,
+  rating INTEGER DEFAULT 5,
+  sort_order INTEGER DEFAULT 0,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Discount coupons tenants can apply to a plan payment. Since billing here
+-- is still a manual bKash queue (no live payment gateway), a coupon
+-- discounts the amount a tenant is told to send and is recorded on their
+-- payment for you to see at approval time — it automates the discount
+-- math and usage-limit tracking, not payment verification itself (same
+-- trust model as the rest of the manual billing flow).
+CREATE TABLE IF NOT EXISTS coupons (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  discount_type TEXT NOT NULL DEFAULT 'percent', -- 'percent' | 'flat'
+  discount_value NUMERIC NOT NULL,
+  max_uses INTEGER, -- null = unlimited
+  used_count INTEGER NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ, -- null = never expires
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -209,7 +269,33 @@ const DEFAULT_PLATFORM_SETTINGS = {
   // messages on behalf of every tenant's WhatsApp number connected via
   // Embedded Signup — this is the standard Tech Provider pattern, so
   // tenants never see or handle an access token themselves.
-  platform_wa_system_user_token: ''
+  platform_wa_system_user_token: '',
+
+  // ---- Public marketing-site content (logo, colors, hero copy, Meta
+  // Pixel, etc.) — everything here is editable from /superadmin → Website
+  // and rendered live on the public landing page. Kept as one JSON blob
+  // (rather than a column per field) so adding new editable fields later
+  // never needs a migration.
+  site_content_json: JSON.stringify({
+    logo_url: '/assets/logo.png',
+    favicon_url: '/assets/logo.png',
+    meta_pixel_id: '',
+    primary_color: '#1F5F52',
+    accent_color: '#C98A2C',
+    hero_headline: "Your Page and WhatsApp answer customers even when you can't.",
+    hero_subheadline: 'Set up your products and your voice once. From then on, an AI trained on your shop replies to Facebook and WhatsApp messages within seconds — day or night.',
+    hero_cta_label: 'Start 3-day free trial',
+    hero_cta_secondary_label: 'See pricing',
+    steps_headline: 'Set up once, running in an afternoon.',
+    step1_title: 'Connect your Page and number',
+    step1_body: 'Link your Facebook Page and connect WhatsApp — no coding, no approval wait.',
+    step2_title: 'Add your products',
+    step2_body: 'List what you sell, prices, and details. This becomes the only source the AI answers from.',
+    step3_title: "Let it answer",
+    step3_body: "Every incoming message gets a reply in your shop's voice. Take over any conversation yourself, anytime.",
+    pricing_note: "3 days free, no payment needed to start. Pay by bKash once you're ready to continue.",
+    footer_text: ''
+  })
 };
 
 // Columns added after this app was first deployed. CREATE TABLE IF NOT
@@ -224,7 +310,9 @@ const MIGRATIONS = [
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT`,
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT`,
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS sku TEXT`,
-  `ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantity INTEGER`
+  `ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantity INTEGER`,
+  `ALTER TABLE payments ADD COLUMN IF NOT EXISTS coupon_code TEXT`,
+  `ALTER TABLE payments ADD COLUMN IF NOT EXISTS discount_amount TEXT`
 ];
 
 async function init() {
@@ -399,10 +487,10 @@ function isTenantActive(tenant) {
 }
 
 // ---------- payments ----------
-async function submitPayment(tenantId, trxId, amount) {
+async function submitPayment(tenantId, trxId, amount, couponCode, discountAmount) {
   const { rows } = await pool.query(
-    `INSERT INTO payments (tenant_id, trx_id, amount) VALUES ($1, $2, $3) RETURNING *`,
-    [tenantId, trxId, amount]
+    `INSERT INTO payments (tenant_id, trx_id, amount, coupon_code, discount_amount) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [tenantId, trxId, amount, couponCode || null, discountAmount || null]
   );
   return rows[0];
 }
@@ -431,6 +519,148 @@ async function getPayment(id) {
 
 async function decidePayment(id, status) {
   await pool.query('UPDATE payments SET status = $1, decided_at = now() WHERE id = $2', [status, id]);
+}
+
+// ---------- public site content (super-admin-controlled marketing site) ----------
+async function getSiteContent() {
+  const platformSettings = await getPlatformSettings();
+  let parsed = {};
+  try { parsed = JSON.parse(platformSettings.site_content_json || '{}'); } catch (e) { parsed = {}; }
+  const defaults = JSON.parse(DEFAULT_PLATFORM_SETTINGS.site_content_json);
+  return { ...defaults, ...parsed };
+}
+
+async function updateSiteContent(partial) {
+  const current = await getSiteContent();
+  const merged = { ...current, ...partial };
+  await updatePlatformSettings({ site_content_json: JSON.stringify(merged) });
+  return merged;
+}
+
+// ---------- hero slides ----------
+async function listHeroSlides(activeOnly) {
+  const { rows } = await pool.query(
+    `SELECT * FROM hero_slides ${activeOnly ? 'WHERE active = true' : ''} ORDER BY sort_order ASC, id ASC`
+  );
+  return rows;
+}
+async function createHeroSlide({ image_url, headline, subheadline, cta_label, cta_url, sort_order }) {
+  const { rows } = await pool.query(
+    `INSERT INTO hero_slides (image_url, headline, subheadline, cta_label, cta_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [image_url || null, headline || null, subheadline || null, cta_label || null, cta_url || null, sort_order || 0]
+  );
+  return rows[0];
+}
+async function updateHeroSlide(id, { image_url, headline, subheadline, cta_label, cta_url, sort_order, active }) {
+  await pool.query(
+    `UPDATE hero_slides SET image_url=$1, headline=$2, subheadline=$3, cta_label=$4, cta_url=$5, sort_order=$6, active=$7 WHERE id=$8`,
+    [image_url || null, headline || null, subheadline || null, cta_label || null, cta_url || null, sort_order || 0, active !== false, id]
+  );
+}
+async function deleteHeroSlide(id) {
+  await pool.query('DELETE FROM hero_slides WHERE id = $1', [id]);
+}
+
+// ---------- blog ----------
+async function listBlogPosts(publishedOnly) {
+  const { rows } = await pool.query(
+    `SELECT * FROM blog_posts ${publishedOnly ? 'WHERE published = true' : ''} ORDER BY created_at DESC`
+  );
+  return rows;
+}
+async function getBlogPostBySlug(slug) {
+  const { rows } = await pool.query('SELECT * FROM blog_posts WHERE slug = $1', [slug]);
+  return rows[0];
+}
+async function getBlogPostById(id) {
+  const { rows } = await pool.query('SELECT * FROM blog_posts WHERE id = $1', [id]);
+  return rows[0];
+}
+async function createBlogPost({ title, slug, cover_image_url, excerpt, content, published }) {
+  const { rows } = await pool.query(
+    `INSERT INTO blog_posts (title, slug, cover_image_url, excerpt, content, published)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [title, slug, cover_image_url || null, excerpt || null, content || null, published !== false]
+  );
+  return rows[0];
+}
+async function updateBlogPost(id, { title, slug, cover_image_url, excerpt, content, published }) {
+  await pool.query(
+    `UPDATE blog_posts SET title=$1, slug=$2, cover_image_url=$3, excerpt=$4, content=$5, published=$6, updated_at=now() WHERE id=$7`,
+    [title, slug, cover_image_url || null, excerpt || null, content || null, published !== false, id]
+  );
+}
+async function deleteBlogPost(id) {
+  await pool.query('DELETE FROM blog_posts WHERE id = $1', [id]);
+}
+
+// ---------- testimonials ----------
+async function listTestimonials(activeOnly) {
+  const { rows } = await pool.query(
+    `SELECT * FROM testimonials ${activeOnly ? 'WHERE active = true' : ''} ORDER BY sort_order ASC, id ASC`
+  );
+  return rows;
+}
+async function createTestimonial({ name, role, avatar_url, quote, rating, sort_order }) {
+  const { rows } = await pool.query(
+    `INSERT INTO testimonials (name, role, avatar_url, quote, rating, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [name, role || null, avatar_url || null, quote, rating || 5, sort_order || 0]
+  );
+  return rows[0];
+}
+async function updateTestimonial(id, { name, role, avatar_url, quote, rating, sort_order, active }) {
+  await pool.query(
+    `UPDATE testimonials SET name=$1, role=$2, avatar_url=$3, quote=$4, rating=$5, sort_order=$6, active=$7 WHERE id=$8`,
+    [name, role || null, avatar_url || null, quote, rating || 5, sort_order || 0, active !== false, id]
+  );
+}
+async function deleteTestimonial(id) {
+  await pool.query('DELETE FROM testimonials WHERE id = $1', [id]);
+}
+
+// ---------- coupons ----------
+async function listCoupons() {
+  const { rows } = await pool.query('SELECT * FROM coupons ORDER BY created_at DESC');
+  return rows;
+}
+async function getCouponByCode(code) {
+  const { rows } = await pool.query('SELECT * FROM coupons WHERE code = $1', [String(code).toUpperCase()]);
+  return rows[0];
+}
+async function createCoupon({ code, discount_type, discount_value, max_uses, expires_at }) {
+  const { rows } = await pool.query(
+    `INSERT INTO coupons (code, discount_type, discount_value, max_uses, expires_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [String(code).toUpperCase().trim(), discount_type, discount_value, max_uses || null, expires_at || null]
+  );
+  return rows[0];
+}
+async function updateCoupon(id, { active }) {
+  await pool.query('UPDATE coupons SET active = $1 WHERE id = $2', [active, id]);
+}
+async function deleteCoupon(id) {
+  await pool.query('DELETE FROM coupons WHERE id = $1', [id]);
+}
+async function incrementCouponUsage(id) {
+  await pool.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1', [id]);
+}
+// Validates a coupon against active/expiry/usage-limit rules and returns
+// the discount it applies to a given base price. Throws a user-facing
+// message on any failure so callers can surface it directly.
+function computeCouponDiscount(coupon, basePrice) {
+  if (!coupon || !coupon.active) throw new Error('That coupon code is not valid.');
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) throw new Error('That coupon code has expired.');
+  if (coupon.max_uses !== null && coupon.max_uses !== undefined && coupon.used_count >= coupon.max_uses) {
+    throw new Error('That coupon code has reached its usage limit.');
+  }
+  const base = parseFloat(basePrice) || 0;
+  let discount = coupon.discount_type === 'flat' ? parseFloat(coupon.discount_value) : base * (parseFloat(coupon.discount_value) / 100);
+  if (discount > base) discount = base;
+  if (discount < 0) discount = 0;
+  const finalPrice = Math.max(0, Math.round((base - discount) * 100) / 100);
+  return { discount: Math.round(discount * 100) / 100, finalPrice };
 }
 
 // ---------- settings (per tenant) ----------
@@ -769,6 +999,29 @@ module.exports = {
   listPendingPayments,
   getPayment,
   decidePayment,
+  getSiteContent,
+  updateSiteContent,
+  listHeroSlides,
+  createHeroSlide,
+  updateHeroSlide,
+  deleteHeroSlide,
+  listBlogPosts,
+  getBlogPostBySlug,
+  getBlogPostById,
+  createBlogPost,
+  updateBlogPost,
+  deleteBlogPost,
+  listTestimonials,
+  createTestimonial,
+  updateTestimonial,
+  deleteTestimonial,
+  listCoupons,
+  getCouponByCode,
+  createCoupon,
+  updateCoupon,
+  deleteCoupon,
+  incrementCouponUsage,
+  computeCouponDiscount,
   getSettings,
   getSetting,
   updateSettings,

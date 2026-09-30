@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Never miss a customer message — AI auto-reply for Facebook & WhatsApp</title>
+<link id="favicon-link" rel="icon" href="/assets/logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -31,9 +32,12 @@
     display: flex; justify-content: space-between; align-items: center;
     padding: 22px 28px; max-width: 1080px; margin: 0 auto;
   }
-  .brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; }
+  .brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; text-decoration: none; color: var(--ink); display: flex; align-items: center; gap: 9px; }
   .brand span { color: var(--teal); }
+  .brand img { height: 30px; width: auto; display: block; }
   header.site a.login { font-size: 14px; font-weight: 600; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+  header.site nav { display: flex; align-items: center; gap: 22px; }
+  header.site nav a.navlink { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--sage); }
 
   .hero { padding: 40px 0 70px; }
   .hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
@@ -59,6 +63,20 @@
   .bubble.reply { background: var(--teal); color: #fff; margin-left: auto; }
   .bubble.reply .timing { display: block; font-size: 11px; opacity: 0.75; margin-top: 4px; }
 
+  /* hero slider (only rendered when slides are configured in super admin) */
+  .hero-slider { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 12px 30px -18px rgba(20,35,31,0.35); margin-bottom: 40px; }
+  .hero-slider .slide { display: none; position: relative; background: #fff; }
+  .hero-slider .slide.active { display: block; }
+  .hero-slider .slide img { width: 100%; height: 320px; object-fit: cover; display: block; }
+  .hero-slider .slide-caption { padding: 18px 24px; }
+  .hero-slider .slide-caption h3 { font-size: 20px; }
+  .hero-slider .slide-caption p { color: var(--sage); font-size: 14px; margin-top: 6px; }
+  .hero-slider .dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+  .hero-slider .dots button { width: 8px; height: 8px; border-radius: 50%; border: none; background: rgba(255,255,255,0.6); cursor: pointer; padding: 0; }
+  .hero-slider .dots button.active { background: #fff; }
+  .hero-slider .arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(20,35,31,0.45); color: #fff; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 15px; }
+  .hero-slider .arrow.prev { left: 10px; } .hero-slider .arrow.next { right: 10px; }
+
   section.steps { padding: 64px 0; border-top: 1px solid var(--line); }
   section.steps h2 { font-size: 28px; margin-bottom: 34px; max-width: 480px; }
   .step-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
@@ -79,6 +97,27 @@
   .price-card li:first-child { border-top: none; }
   .trial-note { font-size: 13px; color: var(--sage); margin-top: 14px; }
 
+  section.testimonials { padding: 64px 0; border-top: 1px solid var(--line); }
+  section.testimonials h2 { font-size: 28px; margin-bottom: 30px; }
+  .testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .testi-card { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 22px; }
+  .testi-card .stars { color: var(--gold); font-size: 14px; margin-bottom: 10px; }
+  .testi-card .quote { font-size: 14px; color: var(--ink); }
+  .testi-card .who { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+  .testi-card .who img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+  .testi-card .who .name { font-weight: 600; font-size: 13px; }
+  .testi-card .who .role { font-size: 12px; color: var(--sage); }
+
+  section.blog { padding: 64px 0; border-top: 1px solid var(--line); }
+  section.blog .blog-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 30px; }
+  section.blog h2 { font-size: 28px; }
+  .blog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .blog-card { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; text-decoration: none; color: var(--ink); display: block; }
+  .blog-card img { width: 100%; height: 140px; object-fit: cover; display: block; background: #F0EDE3; }
+  .blog-card .body { padding: 16px; }
+  .blog-card h3 { font-size: 16px; }
+  .blog-card p { font-size: 13px; color: var(--sage); margin-top: 8px; }
+
   section.signup { padding: 64px 0 90px; border-top: 1px solid var(--line); }
   .signup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
   .signup-grid h2 { font-size: 28px; max-width: 380px; }
@@ -96,7 +135,7 @@
 
   @media (max-width: 820px) {
     .hero-grid, .signup-grid { grid-template-columns: 1fr; }
-    .step-list { grid-template-columns: 1fr; }
+    .step-list, .testi-grid, .blog-grid { grid-template-columns: 1fr; }
     .hero h1 { font-size: 34px; }
   }
 </style>
@@ -127,53 +166,59 @@
 <body>
 
 <header class="site">
-  <div class="brand">Uttor<span>AI</span></div>
-  <a class="login" href="/admin">Log in</a>
+  <a href="/" class="brand" id="brand-link"><span id="brand-text">Baybex<span>AI</span></span></a>
+  <nav>
+    <a class="navlink" href="/blog">Blog</a>
+    <a class="login" href="/admin">Log in</a>
+  </nav>
 </header>
 
 <section class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <h1>Your Page and WhatsApp answer customers even when you can't.</h1>
-      <p class="lede">Set up your products and your voice once. From then on, an AI trained on your shop replies to Facebook and WhatsApp messages within seconds — day or night.</p>
-      <div class="cta-inline">
-        <a href="#signup" class="btn">Start 3-day free trial</a>
-        <a href="#pricing" class="btn outline">See pricing</a>
+  <div class="wrap">
+    <div id="hero-slider-wrap"></div>
+    <div class="hero-grid">
+      <div>
+        <h1 id="hero-headline">Your Page and WhatsApp answer customers even when you can't.</h1>
+        <p class="lede" id="hero-subheadline">Set up your products and your voice once. From then on, an AI trained on your shop replies to Facebook and WhatsApp messages within seconds — day or night.</p>
+        <div class="cta-inline">
+          <a href="#signup" class="btn" id="hero-cta-primary">Start 3-day free trial</a>
+          <a href="#pricing" class="btn outline" id="hero-cta-secondary">See pricing</a>
+        </div>
       </div>
-    </div>
-    <div class="mockup">
-      <div class="platform-tag">WhatsApp · 11:42 PM</div>
-      <div class="bubble customer">Apnader shirt ta ki stock ache? Price koto?</div>
-      <div class="bubble reply">Ji, stock e ache — sizes M/L/XL, price 850 taka. Color: black o navy blue. Order korte chaile bolben.<span class="timing">Replied in 4 seconds</span></div>
+      <div class="mockup">
+        <div class="platform-tag">WhatsApp · 11:42 PM</div>
+        <div class="bubble customer">Apnader shirt ta ki stock ache? Price koto?</div>
+        <div class="bubble reply">Ji, stock e ache — sizes M/L/XL, price 850 taka. Color: black o navy blue. Order korte chaile bolben.<span class="timing">Replied in 4 seconds</span></div>
+      </div>
     </div>
   </div>
 </section>
 
 <section class="steps">
   <div class="wrap">
-    <h2>Set up once, running in an afternoon.</h2>
+    <h2 id="steps-headline">Set up once, running in an afternoon.</h2>
     <div class="step-list">
       <div class="step">
         <div class="num">01</div>
-        <h3>Connect your Page and number</h3>
-        <p>Link your Facebook Page and scan a QR code to connect WhatsApp — no coding, no approval wait.</p>
+        <h3 id="step1-title">Connect your Page and number</h3>
+        <p id="step1-body">Link your Facebook Page and connect WhatsApp — no coding, no approval wait.</p>
       </div>
       <div class="step">
         <div class="num">02</div>
-        <h3>Add your products</h3>
-        <p>List what you sell, prices, and details. This becomes the only source the AI answers from.</p>
+        <h3 id="step2-title">Add your products</h3>
+        <p id="step2-body">List what you sell, prices, and details. This becomes the only source the AI answers from.</p>
       </div>
       <div class="step">
         <div class="num">03</div>
-        <h3>Let it answer</h3>
-        <p>Every incoming message gets a reply in your shop's voice. Take over any conversation yourself, anytime.</p>
+        <h3 id="step3-title">Let it answer</h3>
+        <p id="step3-body">Every incoming message gets a reply in your shop's voice. Take over any conversation yourself, anytime.</p>
       </div>
     </div>
   </div>
 </section>
 
 <section class="pricing" id="pricing">
-  <div class="wrap">
+  <div class="wrap" id="pricing-wrap">
     <div class="price-card">
       <div class="amount">৳1,000 <small>/ month</small></div>
       <ul>
@@ -184,8 +229,25 @@
         <li>Cancel anytime</li>
       </ul>
       <a href="#signup" class="btn">Start free trial</a>
-      <div class="trial-note">3 days free, no payment needed to start. Pay by bKash once you're ready to continue.</div>
+      <div class="trial-note" id="pricing-note">3 days free, no payment needed to start. Pay by bKash once you're ready to continue.</div>
     </div>
+  </div>
+</section>
+
+<section class="testimonials" id="testimonials-section" style="display:none;">
+  <div class="wrap">
+    <h2>What businesses using it say</h2>
+    <div class="testi-grid" id="testi-grid"></div>
+  </div>
+</section>
+
+<section class="blog" id="blog-section" style="display:none;">
+  <div class="wrap">
+    <div class="blog-head">
+      <h2>From the blog</h2>
+      <a href="/blog" class="navlink" style="color:var(--teal); font-weight:600; text-decoration:none; font-size:14px;">View all posts →</a>
+    </div>
+    <div class="blog-grid" id="blog-grid"></div>
   </div>
 </section>
 
@@ -213,7 +275,7 @@
   </div>
 </section>
 
-<footer>
+<footer id="site-footer">
   Already have an account? <a href="/admin">Log in here</a>.
 </footer>
 
@@ -250,6 +312,128 @@ async function doSignup(e) {
   }
   return false;
 }
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function injectMetaPixel(pixelId) {
+  if (!pixelId) return;
+  if (window.fbq) return; // already injected (e.g. hot reload)
+  /* eslint-disable */
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  /* eslint-enable */
+  window.fbq('init', pixelId);
+  window.fbq('track', 'PageView');
+  const noscript = document.createElement('noscript');
+  noscript.innerHTML = '<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=' + encodeURIComponent(pixelId) + '&ev=PageView&noscript=1" />';
+  document.body.appendChild(noscript);
+}
+
+let sliderIndex = 0, sliderTimer = null;
+function renderHeroSlider(slides) {
+  const wrap = document.getElementById('hero-slider-wrap');
+  if (!slides || !slides.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML =
+    '<div class="hero-slider" id="hero-slider">' +
+    slides.map((s, i) =>
+      '<div class="slide' + (i === 0 ? ' active' : '') + '" data-i="' + i + '">' +
+        (s.image_url ? '<img src="' + escapeHtml(s.image_url) + '" alt="" />' : '') +
+        ((s.headline || s.subheadline) ? '<div class="slide-caption"><h3>' + escapeHtml(s.headline || '') + '</h3><p>' + escapeHtml(s.subheadline || '') + '</p></div>' : '') +
+      '</div>'
+    ).join('') +
+    (slides.length > 1 ? (
+      '<button class="arrow prev" onclick="slideTo(sliderIndex-1)">‹</button>' +
+      '<button class="arrow next" onclick="slideTo(sliderIndex+1)">›</button>' +
+      '<div class="dots">' + slides.map((_, i) => '<button class="' + (i === 0 ? 'active' : '') + '" onclick="slideTo(' + i + ')"></button>').join('') + '</div>'
+    ) : '') +
+    '</div>';
+  sliderIndex = 0;
+  if (slides.length > 1) {
+    if (sliderTimer) clearInterval(sliderTimer);
+    sliderTimer = setInterval(() => slideTo(sliderIndex + 1), 6000);
+  }
+}
+function slideTo(i) {
+  const slider = document.getElementById('hero-slider');
+  if (!slider) return;
+  const slides = slider.querySelectorAll('.slide');
+  const dots = slider.querySelectorAll('.dots button');
+  sliderIndex = (i + slides.length) % slides.length;
+  slides.forEach((el, idx) => el.classList.toggle('active', idx === sliderIndex));
+  dots.forEach((el, idx) => el.classList.toggle('active', idx === sliderIndex));
+}
+
+async function loadSiteContent() {
+  try {
+    const res = await fetch('/api/site-content');
+    const c = await res.json();
+
+    if (c.favicon_url) document.getElementById('favicon-link').href = c.favicon_url;
+    if (c.logo_url) {
+      document.getElementById('brand-link').innerHTML = '<img src="' + escapeHtml(c.logo_url) + '" alt="logo" />';
+    }
+    if (c.primary_color) document.documentElement.style.setProperty('--teal', c.primary_color);
+    if (c.accent_color) document.documentElement.style.setProperty('--gold', c.accent_color);
+
+    if (c.hero_headline) document.getElementById('hero-headline').textContent = c.hero_headline;
+    if (c.hero_subheadline) document.getElementById('hero-subheadline').textContent = c.hero_subheadline;
+    if (c.hero_cta_label) document.getElementById('hero-cta-primary').textContent = c.hero_cta_label;
+    if (c.hero_cta_secondary_label) document.getElementById('hero-cta-secondary').textContent = c.hero_cta_secondary_label;
+
+    if (c.steps_headline) document.getElementById('steps-headline').textContent = c.steps_headline;
+    if (c.step1_title) document.getElementById('step1-title').textContent = c.step1_title;
+    if (c.step1_body) document.getElementById('step1-body').textContent = c.step1_body;
+    if (c.step2_title) document.getElementById('step2-title').textContent = c.step2_title;
+    if (c.step2_body) document.getElementById('step2-body').textContent = c.step2_body;
+    if (c.step3_title) document.getElementById('step3-title').textContent = c.step3_title;
+    if (c.step3_body) document.getElementById('step3-body').textContent = c.step3_body;
+    if (c.pricing_note) document.getElementById('pricing-note').textContent = c.pricing_note;
+
+    if (c.footer_text) {
+      document.getElementById('site-footer').innerHTML = escapeHtml(c.footer_text) + ' &middot; <a href="/admin">Log in here</a>.';
+    }
+
+    renderHeroSlider(c.hero_slides);
+    injectMetaPixel(c.meta_pixel_id);
+
+    if (c.testimonials && c.testimonials.length) {
+      document.getElementById('testimonials-section').style.display = 'block';
+      document.getElementById('testi-grid').innerHTML = c.testimonials.map(t =>
+        '<div class="testi-card">' +
+          '<div class="stars">' + '★'.repeat(t.rating || 5) + '</div>' +
+          '<div class="quote">"' + escapeHtml(t.quote) + '"</div>' +
+          '<div class="who">' +
+            (t.avatar_url ? '<img src="' + escapeHtml(t.avatar_url) + '" alt="" />' : '') +
+            '<div><div class="name">' + escapeHtml(t.name) + '</div>' +
+            (t.role ? '<div class="role">' + escapeHtml(t.role) + '</div>' : '') + '</div>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+
+    if (c.recent_posts && c.recent_posts.length) {
+      document.getElementById('blog-section').style.display = 'block';
+      document.getElementById('blog-grid').innerHTML = c.recent_posts.map(p =>
+        '<a class="blog-card" href="/blog/' + encodeURIComponent(p.slug) + '">' +
+          (p.cover_image_url ? '<img src="' + escapeHtml(p.cover_image_url) + '" alt="" />' : '') +
+          '<div class="body"><h3>' + escapeHtml(p.title) + '</h3>' +
+          (p.excerpt ? '<p>' + escapeHtml(p.excerpt) + '</p>' : '') + '</div>' +
+        '</a>'
+      ).join('');
+    }
+  } catch (e) {
+    // Landing page still works with its built-in defaults if this fails.
+    console.warn('Could not load site content', e);
+  }
+}
+loadSiteContent();
 </script>
 </body>
 </html>

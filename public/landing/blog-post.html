@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title id="page-title">Blog</title>
+<link id="favicon-link" rel="icon" href="/assets/logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#14231F; --paper:#FAF7F0; --teal:#1F5F52; --gold:#C98A2C; --sage:#6B7B75; --line:#DDD5C4; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:'Inter',sans-serif; line-height:1.6; }
+  h1,h2,h3 { font-family:'Fraunces',serif; font-weight:600; margin:0; }
+  a { color: var(--teal); }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 28px; }
+  header.site { display:flex; justify-content:space-between; align-items:center; padding:22px 28px; max-width:1080px; margin:0 auto; }
+  .brand { font-family:'Fraunces',serif; font-weight:600; font-size:20px; text-decoration:none; color:var(--ink); display:flex; align-items:center; gap:9px; }
+  .brand span { color: var(--teal); }
+  .brand img { height: 30px; width: auto; display: block; }
+  main { padding: 30px 0 90px; }
+  .back { font-size: 13px; color: var(--sage); text-decoration: none; }
+  h1.post-title { font-size: 36px; margin: 16px 0 10px; }
+  .post-date { font-size: 13px; color: var(--sage); }
+  .cover { width: 100%; max-height: 360px; object-fit: cover; border-radius: 6px; margin: 24px 0; }
+  .content { font-size: 16px; white-space: pre-wrap; }
+  .empty { color: var(--sage); font-size: 14px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<header class="site">
+  <a href="/" class="brand" id="brand-link"><span>Baybex<span>AI</span></span></a>
+</header>
+<main class="wrap">
+  <a class="back" href="/blog">← Back to blog</a>
+  <div id="post-body"></div>
+  <div class="empty" id="post-empty" style="display:none;">This post wasn't found.</div>
+</main>
+<script>
+function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str || ''; return div.innerHTML; }
+async function load() {
+  try {
+    const siteRes = await fetch('/api/site-content');
+    const site = await siteRes.json();
+    if (site.favicon_url) document.getElementById('favicon-link').href = site.favicon_url;
+    if (site.logo_url) document.getElementById('brand-link').innerHTML = '<img src="' + escapeHtml(site.logo_url) + '" alt="logo" />';
+    if (site.primary_color) document.documentElement.style.setProperty('--teal', site.primary_color);
+  } catch (e) {}
+
+  const slug = location.pathname.split('/').filter(Boolean).pop();
+  const res = await fetch('/api/blog/' + encodeURIComponent(slug));
+  if (!res.ok) {
+    document.getElementById('post-empty').style.display = 'block';
+    return;
+  }
+  const post = await res.json();
+  document.getElementById('page-title').textContent = post.title;
+  document.getElementById('post-body').innerHTML =
+    '<h1 class="post-title">' + escapeHtml(post.title) + '</h1>' +
+    '<div class="post-date">' + new Date(post.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + '</div>' +
+    (post.cover_image_url ? '<img class="cover" src="' + escapeHtml(post.cover_image_url) + '" alt="" />' : '') +
+    '<div class="content">' + escapeHtml(post.content) + '</div>';
+}
+load();
+</script>
+</body>
+</html>

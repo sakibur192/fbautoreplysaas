@@ -155,6 +155,23 @@ Tenants can also override any order's status manually from the Orders tab (confi
 
 **Image handling note:** incoming images are downloaded, base64-encoded, and sent straight to the AI model for that single reply — they're not saved to disk or the database. The conversation log stores a `[Image]` placeholder so you can see one arrived, but not the image itself. If you want a permanent image archive later, that's an addition, not something built in now.
 
+## The public website is now a CMS — all controlled from `/superadmin` → Website
+The landing page at `/` is no longer static HTML you'd have to edit and redeploy to change. Everything below is editable live from the super admin panel's **Website** section and takes effect immediately, no redeploy:
+
+- **Branding** — upload a logo and favicon (shown in `/superadmin` → Website → Branding; uploads go through a `multer`-backed endpoint and are served from `/uploads`), and pick a primary/accent color for the whole site (CSS custom properties, applied at runtime).
+- **Meta Pixel** — paste a Pixel ID and the landing page (and blog pages) inject Facebook's standard pixel snippet automatically, including the `<noscript>` fallback. Leave it blank to disable tracking entirely.
+- **Hero section & "how it works" steps** — headline, subheadline, both button labels, the steps section headline, and each of the three step titles/descriptions are all plain text fields you edit directly — no code.
+- **Hero slider** — an optional rotating image banner above the headline. Add as many slides as you want (image + optional headline/subheadline + sort order); with zero or one slide, no slider chrome (arrows/dots) renders at all.
+- **Blog** — full CRUD (title, cover image, excerpt, content, publish/unpublish). Published posts appear at `/blog` (list) and `/blog/<slug>` (detail), and the 3 most recent show in a "From the blog" section on the homepage. Slugs are generated from the title automatically and de-duplicated if two posts would collide.
+- **Testimonials / reviews** — name, role, avatar, quote, star rating (1–5). Shown on the homepage once at least one exists; the whole section stays hidden otherwise.
+
+All of it is served from one public, no-auth endpoint (`GET /api/site-content`) that the landing page (and `/blog`, `/blog/<slug>`) fetch on load — so the static HTML files ship with sensible built-in defaults (including this project's own default logo/colors) and layer the super admin's edits on top at runtime. If that fetch ever fails, the page still renders with its defaults rather than breaking.
+
+## Discount coupons
+Super admin → Website → **Discount coupons**: create a code (percent-off or flat-BDT-off), an optional max-uses cap, and an optional expiry date. In their Billing tab, a tenant can enter a code before submitting a bKash payment — it's validated live and the amount they're told to pay updates to the discounted price.
+
+**Be clear-eyed about what this does and doesn't enforce.** Billing here is still the same manual bKash queue as everywhere else in this app — there's no payment gateway actually charging a card. A coupon automates the *discount math* (computing the reduced price, capping usage, expiring on schedule) and *records* which coupon was used on the payment row you see in Pending payments — it does not verify that the tenant actually sent the discounted amount. Keep glancing at the coupon/discount note shown next to each pending payment when you approve, the same way you already eyeball the transaction ID and amount.
+
 ## Super admin visibility into any tenant
 Beyond impersonation ("Log in as", full access to their panel), the Tenants table has a **View** button showing a read-only summary without switching session: their plan and usage, reply mode, which channels are enabled, whether they're on the universal AI key or a tenant-specific override, product/order counts, total replies sent, and their AI cost this month / all-time — a quick way to answer a support question without fully logging in as them.
 
@@ -198,6 +215,8 @@ Things worth adding as you grow, not yet built:
 - `ai.js` — OpenAI or Gemini reply generation per tenant (resolves universal vs. tenant-override credentials, model, prompt, website info, products, conversation history), including order/payment tool-calling, image understanding, and cost logging
 - `pacing.js` — the human-like delay helper shared across channels
 - `server.js` — Express app: security headers/rate limiting, tenant auth/register/login/profile, billing, super admin, all API routes
-- `public/landing/index.html` — the buy/signup page (name, phone, WhatsApp, email, password)
-- `public/admin/index.html` — tenant's own panel (dashboard, settings, website scan, products, orders, conversations, billing, profile)
-- `public/superadmin/index.html` — your panel (plans with duration, tenants, payments, AI cost)
+- `public/landing/index.html` — the buy/signup page (name, phone, WhatsApp, email, password); now a CMS-driven page that pulls its logo/colors/hero/slider/testimonials/blog preview live from `/api/site-content`
+- `public/landing/blog.html`, `public/landing/blog-post.html` — the public blog list and post-detail pages
+- `public/landing/assets/logo.png` — the default Baybex AI logo/favicon shipped with the project (replaceable from `/superadmin` → Website → Branding)
+- `public/admin/index.html` — tenant's own panel (dashboard, settings, website scan, products, orders, conversations, billing with coupon entry, profile)
+- `public/superadmin/index.html` — your panel (plans with duration, Website CMS — branding/pixel/hero/slider/blog/testimonials/coupons, tenants, payments, AI cost)

@@ -175,6 +175,156 @@
       </div>
     </div>
 
+    <h2>Website — public landing page</h2>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Everything here controls the public site at <code>/</code> — logo, colors, Meta Pixel, hero text, slider, blog, and reviews. Changes go live as soon as you save.</p>
+
+      <h4>Branding</h4>
+      <div class="row">
+        <div class="col">
+          <label>Logo</label>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+            <img id="site-logo-preview" src="" style="height:34px; display:none; border-radius:4px;" />
+            <input type="file" accept="image/*" onchange="uploadSiteImage(this,'logo_url')" />
+          </div>
+          <label>Favicon</label>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+            <img id="site-favicon-preview" src="" style="height:24px; display:none; border-radius:4px;" />
+            <input type="file" accept="image/*" onchange="uploadSiteImage(this,'favicon_url')" />
+          </div>
+        </div>
+        <div class="col">
+          <label>Primary color</label>
+          <input id="site-primary-color" type="color" style="width:100%; height:38px; padding:2px;" />
+          <label>Accent color</label>
+          <input id="site-accent-color" type="color" style="width:100%; height:38px; padding:2px;" />
+        </div>
+      </div>
+
+      <h4 style="margin-top:22px;">Meta Pixel</h4>
+      <label>Pixel ID <span style="font-weight:400;color:#6b7280;">(leave blank to disable tracking)</span></label>
+      <input id="site-meta-pixel" type="text" placeholder="e.g. 123456789012345" style="width:100%;" />
+
+      <h4 style="margin-top:22px;">Hero section</h4>
+      <label>Headline</label>
+      <input id="site-hero-headline" type="text" style="width:100%;" />
+      <label>Subheadline</label>
+      <input id="site-hero-subheadline" type="text" style="width:100%;" />
+      <div class="row">
+        <div class="col"><label>Primary button text</label><input id="site-hero-cta" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Secondary button text</label><input id="site-hero-cta2" type="text" style="width:100%;" /></div>
+      </div>
+
+      <h4 style="margin-top:22px;">"How it works" steps</h4>
+      <label>Section headline</label>
+      <input id="site-steps-headline" type="text" style="width:100%;" />
+      <div class="row">
+        <div class="col"><label>Step 1 title</label><input id="site-step1-title" type="text" style="width:100%;" /><label>Step 1 text</label><input id="site-step1-body" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Step 2 title</label><input id="site-step2-title" type="text" style="width:100%;" /><label>Step 2 text</label><input id="site-step2-body" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Step 3 title</label><input id="site-step3-title" type="text" style="width:100%;" /><label>Step 3 text</label><input id="site-step3-body" type="text" style="width:100%;" /></div>
+      </div>
+
+      <h4 style="margin-top:22px;">Pricing & footer</h4>
+      <label>Trial note (under the price card)</label>
+      <input id="site-pricing-note" type="text" style="width:100%;" />
+      <label>Footer text <span style="font-weight:400;color:#6b7280;">(leave blank for the default "Already have an account?" line)</span></label>
+      <input id="site-footer-text" type="text" style="width:100%;" />
+
+      <div style="margin-top:16px;">
+        <button onclick="saveSiteContent()">Save website content</button>
+        <span id="site-content-save-msg" style="color:#166534; font-size:13px; margin-left:8px;"></span>
+      </div>
+    </div>
+
+    <h4 style="margin-top:24px;">Hero slider</h4>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Optional rotating banner shown above the headline. Leave empty for no slider.</p>
+      <table>
+        <thead><tr><th>Image</th><th>Headline</th><th>Order</th><th></th></tr></thead>
+        <tbody id="slide-rows"></tbody>
+      </table>
+      <div id="slides-empty" class="empty" style="display:none;">No slides yet.</div>
+      <h4 style="margin-top:18px;">Add slide</h4>
+      <div class="row">
+        <div class="col">
+          <label>Image</label>
+          <input type="file" accept="image/*" id="new-slide-image-file" onchange="uploadTempImage(this,'new-slide-image-url')" />
+          <input type="hidden" id="new-slide-image-url" />
+        </div>
+        <div class="col"><label>Headline</label><input id="new-slide-headline" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Subheadline</label><input id="new-slide-subheadline" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Sort order</label><input id="new-slide-order" type="number" value="0" style="width:100%;" /></div>
+      </div>
+      <div style="margin-top:12px;"><button onclick="addSlide()">Add slide</button></div>
+    </div>
+
+    <h4 style="margin-top:24px;">Blog</h4>
+    <div class="card">
+      <table>
+        <thead><tr><th>Title</th><th>Published</th><th>Date</th><th></th></tr></thead>
+        <tbody id="blog-rows"></tbody>
+      </table>
+      <div id="blog-empty" class="empty" style="display:none;">No posts yet.</div>
+      <h4 style="margin-top:18px;">New post</h4>
+      <label>Title</label>
+      <input id="new-blog-title" type="text" style="width:100%;" />
+      <label>Cover image</label>
+      <input type="file" accept="image/*" onchange="uploadTempImage(this,'new-blog-cover-url')" />
+      <input type="hidden" id="new-blog-cover-url" />
+      <label>Excerpt <span style="font-weight:400;color:#6b7280;">(short summary shown on cards)</span></label>
+      <input id="new-blog-excerpt" type="text" style="width:100%;" />
+      <label>Content</label>
+      <textarea id="new-blog-content" rows="6" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-family:inherit; font-size:13px;"></textarea>
+      <div class="toggle-row"><input type="checkbox" id="new-blog-published" checked /> <span>Published</span></div>
+      <div style="margin-top:12px;"><button onclick="addBlogPost()">Publish post</button></div>
+    </div>
+
+    <h4 style="margin-top:24px;">Testimonials / reviews</h4>
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Quote</th><th>Rating</th><th></th></tr></thead>
+        <tbody id="testimonial-rows"></tbody>
+      </table>
+      <div id="testimonials-empty" class="empty" style="display:none;">No testimonials yet.</div>
+      <h4 style="margin-top:18px;">Add testimonial</h4>
+      <div class="row">
+        <div class="col"><label>Name</label><input id="new-testi-name" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Role / company</label><input id="new-testi-role" type="text" style="width:100%;" /></div>
+        <div class="col"><label>Rating (1-5)</label><input id="new-testi-rating" type="number" min="1" max="5" value="5" style="width:100%;" /></div>
+      </div>
+      <label>Avatar</label>
+      <input type="file" accept="image/*" onchange="uploadTempImage(this,'new-testi-avatar-url')" />
+      <input type="hidden" id="new-testi-avatar-url" />
+      <label>Quote</label>
+      <input id="new-testi-quote" type="text" style="width:100%;" />
+      <div style="margin-top:12px;"><button onclick="addTestimonial()">Add testimonial</button></div>
+    </div>
+
+    <h4 style="margin-top:24px;">Discount coupons</h4>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">Tenants can enter a code in their Billing tab before submitting a bKash payment — it recalculates the amount they're told to pay. Since billing is still a manual queue, always sanity-check the paid amount against the discount when approving.</p>
+      <table>
+        <thead><tr><th>Code</th><th>Discount</th><th>Uses</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+        <tbody id="coupon-rows"></tbody>
+      </table>
+      <div id="coupons-empty" class="empty" style="display:none;">No coupons yet.</div>
+      <h4 style="margin-top:18px;">Add coupon</h4>
+      <div class="row">
+        <div class="col"><label>Code</label><input id="new-coupon-code" type="text" placeholder="EID2026" style="width:100%; text-transform:uppercase;" /></div>
+        <div class="col">
+          <label>Type</label>
+          <select id="new-coupon-type" style="width:100%;">
+            <option value="percent">Percent off</option>
+            <option value="flat">Flat BDT off</option>
+          </select>
+        </div>
+        <div class="col"><label>Value</label><input id="new-coupon-value" type="number" placeholder="10" style="width:100%;" /></div>
+        <div class="col"><label>Max uses <span style="font-weight:400;color:#6b7280;">(blank = unlimited)</span></label><input id="new-coupon-maxuses" type="number" style="width:100%;" /></div>
+        <div class="col"><label>Expires <span style="font-weight:400;color:#6b7280;">(blank = never)</span></label><input id="new-coupon-expires" type="date" style="width:100%;" /></div>
+      </div>
+      <div style="margin-top:12px;"><button onclick="addCoupon()">Add coupon</button></div>
+    </div>
+
     <h2>Pending payments</h2>
     <table>
       <thead><tr><th>Business</th><th>Email</th><th>Trx ID</th><th>Amount</th><th>Submitted</th><th></th></tr></thead>
@@ -276,6 +426,11 @@ function showApp() {
   loadPlans();
   loadPayments();
   loadTenants();
+  loadSiteContent();
+  loadSlides();
+  loadBlogPosts();
+  loadTestimonials();
+  loadCoupons();
 }
 
 function fmtUsd(n) {
@@ -431,6 +586,266 @@ async function deactivatePlan(id) {
   toast('Plan deactivated');
 }
 
+// ================= Website (public landing page) =================
+
+async function uploadFile(fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return null;
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch('/api/superadmin/upload', { method: 'POST', body: formData });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return null; }
+  return data.url;
+}
+
+// Uploads an image and immediately saves it into site content (for logo/favicon).
+async function uploadSiteImage(fileInput, field) {
+  const url = await uploadFile(fileInput);
+  if (!url) return;
+  const body = {}; body[field] = url;
+  await api('/api/superadmin/site-content', { method: 'POST', body: JSON.stringify(body) });
+  toast('Uploaded');
+  loadSiteContent();
+}
+
+// Uploads an image into a hidden field for a not-yet-created record (a new
+// slide/post/testimonial) — saved only when that record's own "Add" button runs.
+async function uploadTempImage(fileInput, hiddenFieldId) {
+  const url = await uploadFile(fileInput);
+  if (!url) return;
+  document.getElementById(hiddenFieldId).value = url;
+  toast('Image uploaded');
+}
+
+async function loadSiteContent() {
+  const c = await api('/api/superadmin/site-content');
+  document.getElementById('site-logo-preview').src = c.logo_url || '';
+  document.getElementById('site-logo-preview').style.display = c.logo_url ? 'inline-block' : 'none';
+  document.getElementById('site-favicon-preview').src = c.favicon_url || '';
+  document.getElementById('site-favicon-preview').style.display = c.favicon_url ? 'inline-block' : 'none';
+  document.getElementById('site-primary-color').value = c.primary_color || '#1F5F52';
+  document.getElementById('site-accent-color').value = c.accent_color || '#C98A2C';
+  document.getElementById('site-meta-pixel').value = c.meta_pixel_id || '';
+  document.getElementById('site-hero-headline').value = c.hero_headline || '';
+  document.getElementById('site-hero-subheadline').value = c.hero_subheadline || '';
+  document.getElementById('site-hero-cta').value = c.hero_cta_label || '';
+  document.getElementById('site-hero-cta2').value = c.hero_cta_secondary_label || '';
+  document.getElementById('site-steps-headline').value = c.steps_headline || '';
+  document.getElementById('site-step1-title').value = c.step1_title || '';
+  document.getElementById('site-step1-body').value = c.step1_body || '';
+  document.getElementById('site-step2-title').value = c.step2_title || '';
+  document.getElementById('site-step2-body').value = c.step2_body || '';
+  document.getElementById('site-step3-title').value = c.step3_title || '';
+  document.getElementById('site-step3-body').value = c.step3_body || '';
+  document.getElementById('site-pricing-note').value = c.pricing_note || '';
+  document.getElementById('site-footer-text').value = c.footer_text || '';
+}
+
+async function saveSiteContent() {
+  const body = {
+    meta_pixel_id: document.getElementById('site-meta-pixel').value.trim(),
+    primary_color: document.getElementById('site-primary-color').value,
+    accent_color: document.getElementById('site-accent-color').value,
+    hero_headline: document.getElementById('site-hero-headline').value,
+    hero_subheadline: document.getElementById('site-hero-subheadline').value,
+    hero_cta_label: document.getElementById('site-hero-cta').value,
+    hero_cta_secondary_label: document.getElementById('site-hero-cta2').value,
+    steps_headline: document.getElementById('site-steps-headline').value,
+    step1_title: document.getElementById('site-step1-title').value,
+    step1_body: document.getElementById('site-step1-body').value,
+    step2_title: document.getElementById('site-step2-title').value,
+    step2_body: document.getElementById('site-step2-body').value,
+    step3_title: document.getElementById('site-step3-title').value,
+    step3_body: document.getElementById('site-step3-body').value,
+    pricing_note: document.getElementById('site-pricing-note').value,
+    footer_text: document.getElementById('site-footer-text').value
+  };
+  await api('/api/superadmin/site-content', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('site-content-save-msg').textContent = 'Saved';
+  setTimeout(() => document.getElementById('site-content-save-msg').textContent = '', 2000);
+  toast('Website content saved');
+}
+
+// ---- Hero slider ----
+async function loadSlides() {
+  const slides = await api('/api/superadmin/hero-slides');
+  const tbody = document.getElementById('slide-rows');
+  tbody.innerHTML = '';
+  document.getElementById('slides-empty').style.display = slides.length ? 'none' : 'block';
+  slides.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + (s.image_url ? '<img src="' + s.image_url + '" style="height:32px;border-radius:3px;" />' : '—') + '</td>' +
+      '<td>' + escapeHtml(s.headline || '') + '</td>' +
+      '<td>' + s.sort_order + '</td>' +
+      '<td><button class="danger" onclick="deleteSlide(' + s.id + ')">Delete</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+async function addSlide() {
+  const body = {
+    image_url: document.getElementById('new-slide-image-url').value,
+    headline: document.getElementById('new-slide-headline').value.trim(),
+    subheadline: document.getElementById('new-slide-subheadline').value.trim(),
+    sort_order: parseInt(document.getElementById('new-slide-order').value, 10) || 0
+  };
+  await api('/api/superadmin/hero-slides', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('new-slide-image-url').value = '';
+  document.getElementById('new-slide-image-file').value = '';
+  document.getElementById('new-slide-headline').value = '';
+  document.getElementById('new-slide-subheadline').value = '';
+  document.getElementById('new-slide-order').value = '0';
+  loadSlides();
+  toast('Slide added');
+}
+async function deleteSlide(id) {
+  await api('/api/superadmin/hero-slides/' + id, { method: 'DELETE' });
+  loadSlides();
+  toast('Slide removed', 'error');
+}
+
+// ---- Blog ----
+async function loadBlogPosts() {
+  const posts = await api('/api/superadmin/blog');
+  const tbody = document.getElementById('blog-rows');
+  tbody.innerHTML = '';
+  document.getElementById('blog-empty').style.display = posts.length ? 'none' : 'block';
+  posts.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapeHtml(p.title) + '</td>' +
+      '<td>' + (p.published ? '<span class="badge active">published</span>' : '<span class="badge inactive">draft</span>') + '</td>' +
+      '<td>' + new Date(p.created_at).toLocaleDateString() + '</td>' +
+      '<td><button class="secondary" onclick="toggleBlogPublished(' + p.id + ',' + !p.published + ')">' + (p.published ? 'Unpublish' : 'Publish') + '</button> ' +
+      '<button class="danger" onclick="deleteBlogPost(' + p.id + ')">Delete</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+async function addBlogPost() {
+  const title = document.getElementById('new-blog-title').value.trim();
+  if (!title) return toast('Title is required', 'error');
+  const body = {
+    title,
+    cover_image_url: document.getElementById('new-blog-cover-url').value,
+    excerpt: document.getElementById('new-blog-excerpt').value.trim(),
+    content: document.getElementById('new-blog-content').value,
+    published: document.getElementById('new-blog-published').checked
+  };
+  await api('/api/superadmin/blog', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('new-blog-title').value = '';
+  document.getElementById('new-blog-cover-url').value = '';
+  document.getElementById('new-blog-excerpt').value = '';
+  document.getElementById('new-blog-content').value = '';
+  document.getElementById('new-blog-published').checked = true;
+  loadBlogPosts();
+  toast('Post published');
+}
+async function toggleBlogPublished(id, published) {
+  await api('/api/superadmin/blog/' + id, { method: 'PUT', body: JSON.stringify({ published }) });
+  loadBlogPosts();
+}
+async function deleteBlogPost(id) {
+  await api('/api/superadmin/blog/' + id, { method: 'DELETE' });
+  loadBlogPosts();
+  toast('Post removed', 'error');
+}
+
+// ---- Testimonials ----
+async function loadTestimonials() {
+  const list = await api('/api/superadmin/testimonials');
+  const tbody = document.getElementById('testimonial-rows');
+  tbody.innerHTML = '';
+  document.getElementById('testimonials-empty').style.display = list.length ? 'none' : 'block';
+  list.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapeHtml(t.name) + '</td>' +
+      '<td style="max-width:260px;">' + escapeHtml((t.quote || '').slice(0, 80)) + ((t.quote || '').length > 80 ? '…' : '') + '</td>' +
+      '<td>' + '★'.repeat(t.rating || 5) + '</td>' +
+      '<td><button class="danger" onclick="deleteTestimonial(' + t.id + ')">Delete</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+async function addTestimonial() {
+  const name = document.getElementById('new-testi-name').value.trim();
+  const quote = document.getElementById('new-testi-quote').value.trim();
+  if (!name || !quote) return toast('Name and quote are required', 'error');
+  const body = {
+    name,
+    role: document.getElementById('new-testi-role').value.trim(),
+    rating: parseInt(document.getElementById('new-testi-rating').value, 10) || 5,
+    avatar_url: document.getElementById('new-testi-avatar-url').value,
+    quote
+  };
+  await api('/api/superadmin/testimonials', { method: 'POST', body: JSON.stringify(body) });
+  document.getElementById('new-testi-name').value = '';
+  document.getElementById('new-testi-role').value = '';
+  document.getElementById('new-testi-rating').value = '5';
+  document.getElementById('new-testi-avatar-url').value = '';
+  document.getElementById('new-testi-quote').value = '';
+  loadTestimonials();
+  toast('Testimonial added');
+}
+async function deleteTestimonial(id) {
+  await api('/api/superadmin/testimonials/' + id, { method: 'DELETE' });
+  loadTestimonials();
+  toast('Testimonial removed', 'error');
+}
+
+// ---- Coupons ----
+function formatDiscount(c) {
+  return c.discount_type === 'percent' ? (c.discount_value + '% off') : ('৳' + c.discount_value + ' off');
+}
+async function loadCoupons() {
+  const coupons = await api('/api/superadmin/coupons');
+  const tbody = document.getElementById('coupon-rows');
+  tbody.innerHTML = '';
+  document.getElementById('coupons-empty').style.display = coupons.length ? 'none' : 'block';
+  coupons.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><strong>' + escapeHtml(c.code) + '</strong></td>' +
+      '<td>' + formatDiscount(c) + '</td>' +
+      '<td>' + c.used_count + (c.max_uses ? ' / ' + c.max_uses : '') + '</td>' +
+      '<td>' + (c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—') + '</td>' +
+      '<td>' + (c.active ? '<span class="badge active">active</span>' : '<span class="badge inactive">off</span>') + '</td>' +
+      '<td><button class="secondary" onclick="toggleCoupon(' + c.id + ',' + !c.active + ')">' + (c.active ? 'Disable' : 'Enable') + '</button> ' +
+      '<button class="danger" onclick="deleteCoupon(' + c.id + ')">Delete</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+async function addCoupon() {
+  const code = document.getElementById('new-coupon-code').value.trim();
+  const discount_value = document.getElementById('new-coupon-value').value;
+  if (!code || !discount_value) return toast('Code and value are required', 'error');
+  const body = {
+    code,
+    discount_type: document.getElementById('new-coupon-type').value,
+    discount_value,
+    max_uses: document.getElementById('new-coupon-maxuses').value,
+    expires_at: document.getElementById('new-coupon-expires').value || null
+  };
+  const res = await fetch('/api/superadmin/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) return toast(data.error || 'Could not add coupon', 'error');
+  document.getElementById('new-coupon-code').value = '';
+  document.getElementById('new-coupon-value').value = '';
+  document.getElementById('new-coupon-maxuses').value = '';
+  document.getElementById('new-coupon-expires').value = '';
+  loadCoupons();
+  toast('Coupon added');
+}
+async function toggleCoupon(id, active) {
+  await api('/api/superadmin/coupons/' + id + '/toggle', { method: 'POST', body: JSON.stringify({ active }) });
+  loadCoupons();
+}
+async function deleteCoupon(id) {
+  await api('/api/superadmin/coupons/' + id, { method: 'DELETE' });
+  loadCoupons();
+  toast('Coupon removed', 'error');
+}
+
 async function loadPayments() {
   const payments = await api('/api/superadmin/payments');
   const tbody = document.getElementById('payment-rows');
@@ -442,7 +857,7 @@ async function loadPayments() {
       '<td>' + escapeHtml(p.business_name) + '</td>' +
       '<td>' + escapeHtml(p.email) + '</td>' +
       '<td>' + escapeHtml(p.trx_id) + '</td>' +
-      '<td>' + escapeHtml(p.amount) + '</td>' +
+      '<td>' + escapeHtml(p.amount) + (p.coupon_code ? ' <span style="color:#166534;font-size:11px;">(coupon ' + escapeHtml(p.coupon_code) + ', -৳' + escapeHtml(p.discount_amount) + ')</span>' : '') + '</td>' +
       '<td>' + new Date(p.submitted_at).toLocaleString() + '</td>' +
       '<td><button class="success" onclick="decide(' + p.id + ',\'approve\')">Approve</button> ' +
       '<button class="danger" onclick="decide(' + p.id + ',\'reject\')">Reject</button></td>';
