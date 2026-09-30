@@ -516,6 +516,26 @@ app.get('/api/superadmin/costs', requireSuperAdmin, async (req, res) => {
   res.json(await db.getPlatformCostSummary());
 });
 
+// One-glance readiness check for the Meta App setup that serves every
+// tenant's Facebook/Instagram/WhatsApp connection. These are all deploy-time
+// values from config.js (not the database), so this never returns the
+// actual secret values — only whether each one has been filled in, plus
+// the exact webhook URL/token to paste into the Meta App dashboard (safe
+// to show since you set FB_WEBHOOK_VERIFY_TOKEN yourself, it's not a secret
+// Meta generates for you).
+app.get('/api/superadmin/meta-status', requireSuperAdmin, (req, res) => {
+  const publicBaseUrlSet = !!config.PUBLIC_BASE_URL && config.PUBLIC_BASE_URL !== 'https://your-domain.example.com';
+  res.json({
+    public_base_url_set: publicBaseUrlSet,
+    public_base_url: publicBaseUrlSet ? config.PUBLIC_BASE_URL : '',
+    fb_app_configured: !!(config.FB_APP_ID && config.FB_APP_SECRET),
+    fb_webhook_token_set: !!config.FB_WEBHOOK_VERIFY_TOKEN && config.FB_WEBHOOK_VERIFY_TOKEN !== 'change-this-verify-token',
+    fb_webhook_verify_token: config.FB_WEBHOOK_VERIFY_TOKEN || '',
+    wa_embedded_signup_configured: !!config.WA_EMBEDDED_SIGNUP_CONFIG_ID,
+    webhook_url: publicBaseUrlSet ? config.PUBLIC_BASE_URL.replace(/\/$/, '') + '/webhook' : ''
+  });
+});
+
 // ---- Per-tenant AI key override ----
 // Never shown in the tenant's own panel — this is the ONLY place a
 // tenant-specific key can be set, and it always falls back to the

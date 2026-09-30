@@ -4,22 +4,54 @@
 <meta charset="UTF-8" />
 <title>Super Admin</title>
 <style>
+  :root {
+    --violet: #6d28d9; --violet-2: #4f46e5; --pink: #ec4899; --cyan: #06b6d4;
+    --grad-brand: linear-gradient(135deg, var(--violet-2), var(--violet), var(--pink));
+    --ink: #1a1a2e; --muted: #6b7280; --bg: #f3f2fb; --card-line: #ece9fb;
+    --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
+  }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f5f7; color: #1a1a1a; }
-  #login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; }
-  .card { background: #fff; border-radius: 10px; padding: 28px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-  .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; }
-  button, .btn { background: #2563eb; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn.danger { background: #dc2626; }
-  .btn.success { background: #16a34a; }
-  .btn.secondary { background: #64748b; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+  html { scroll-behavior: smooth; }
+  #login-screen {
+    display: flex; align-items: center; justify-content: center; height: 100vh;
+    background: radial-gradient(circle at 20% 20%, #4f46e5 0%, transparent 45%),
+                radial-gradient(circle at 85% 80%, #ec4899 0%, transparent 45%),
+                linear-gradient(135deg, #1a1a2e, #241b4d 55%, #1a1a2e);
+  }
+  #login-screen .card { box-shadow: 0 30px 70px -20px rgba(0,0,0,0.55); }
+  .card { background: #fff; border-radius: 14px; padding: 28px; box-shadow: 0 2px 14px rgba(84,49,179,0.08); border: 1px solid var(--card-line); }
+  .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; }
+  button, .btn { background: var(--grad-brand); background-size: 160% 160%; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn.danger { background: var(--danger); }
+  .btn.success { background: linear-gradient(135deg, #16a34a, #22c55e); }
+  .btn.secondary { background: #4b5563; }
   #app { display: none; }
-  header { background: #111827; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
-  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
-  h2 { font-size: 18px; margin: 30px 0 12px; }
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+  .app-shell { display: flex; align-items: stretch; min-height: 100vh; }
+  .sidebar {
+    width: 230px; flex-shrink: 0; background: linear-gradient(190deg, #1a1a2e 0%, #241b4d 60%, #2c1f5e 100%);
+    color: #fff; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .sidebar-brand { padding: 22px 20px; font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--grad-brand); box-shadow: 0 0 12px 2px rgba(236,72,153,0.8); }
+  .jumpnav { display: flex; flex-direction: column; gap: 3px; padding: 14px 12px; flex: 1; }
+  .jumpnav a {
+    color: rgba(255,255,255,0.75); text-decoration: none; padding: 10px 14px; border-radius: 9px; font-size: 13.5px;
+    display: flex; align-items: center; gap: 9px; font-weight: 500; position: relative;
+  }
+  .jumpnav a .ico { font-size: 15px; width: 18px; text-align: center; }
+  .jumpnav a:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .jumpnav a.active { background: rgba(255,255,255,0.12); color: #fff; }
+  .jumpnav a.active::before { content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 4px; border-radius: 4px; background: var(--grad-brand); }
+  .sidebar-footer { padding: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .main-col { flex: 1; min-width: 0; }
+  header { background: #fff; border-bottom: 1px solid var(--card-line); color: var(--ink); padding: 16px 28px; display: flex; justify-content: space-between; align-items: center; }
+  main { padding: 26px 28px 60px; max-width: 1100px; margin: 0 auto; }
+  h2 { font-size: 19px; margin: 34px 0 12px; scroll-margin-top: 20px; letter-spacing: -0.01em; }
+  h2:first-child, main > h2:first-of-type { margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-  th { background: #f9fafb; font-weight: 600; color: #374151; }
+  th { background: #faf9ff; font-weight: 600; color: #4b5563; }
   .badge { padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
   .badge.active { background: #dcfce7; color: #166534; }
   .badge.inactive { background: #fee2e2; color: #991b1b; }
@@ -38,32 +70,43 @@
   .modal dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; margin-top: 12px; }
   .modal dt { color: #6b7280; }
   .modal dd { margin: 0; font-weight: 600; }
+
+  /* Meta setup checklist */
+  .setup-steps { list-style: none; padding: 0; margin: 14px 0 0; }
+  .setup-steps li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid #f1f5f9; }
+  .setup-steps li:first-child { border-top: none; }
+  .check-dot { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-top: 1px; }
+  .check-dot.yes { background: #dcfce7; color: #166534; }
+  .check-dot.no { background: #fee2e2; color: #991b1b; }
+  .copy-row { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+  .copy-row code { background: #f4f2ff; border: 1px solid var(--card-line); padding: 7px 10px; border-radius: 7px; font-size: 12.5px; flex: 1; overflow-x: auto; white-space: nowrap; }
+  .copy-row button { flex-shrink: 0; }
 </style>
 
 <style>
   * { transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease; }
   button, .btn { cursor: pointer; }
   button:not(:disabled):active { transform: scale(0.97); }
-  button:not(.secondary):not(.danger):not(.success):hover { box-shadow: 0 4px 12px rgba(37,99,235,0.28); transform: translateY(-1px); }
+  button:not(.secondary):not(.danger):not(.success):hover { box-shadow: 0 8px 22px -6px rgba(109,40,217,0.55); transform: translateY(-1px); background-position: 100% 50%; }
   .card { transition: box-shadow 0.2s ease; }
-  .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+  .card:hover { box-shadow: 0 10px 28px -10px rgba(84,49,179,0.18); }
   tr { transition: background-color 0.15s ease; }
-  tr:hover td { background: #f9fafb; }
+  tr:hover td { background: #faf9ff; }
   input[type=text], input[type=password], input[type=number] {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+  input:focus { outline: none; border-color: var(--violet-2); box-shadow: 0 0 0 3px rgba(79,70,229,0.15); }
   .modal-backdrop { transition: opacity 0.2s ease; }
   .modal-backdrop .modal { transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; transform: scale(0.94); opacity: 0; }
   .modal-backdrop.open .modal { transform: scale(1); opacity: 1; }
   #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
   .toast {
-    background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2); opacity: 0; transform: translateY(8px) scale(0.98);
+    background: #1a1a2e; color: #fff; padding: 10px 16px; border-radius: 9px; font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25); opacity: 0; transform: translateY(8px) scale(0.98);
     animation: toastIn 0.25s ease forwards;
   }
-  .toast.success { background: #166534; }
-  .toast.error { background: #991b1b; }
+  .toast.success { background: linear-gradient(135deg, #166534, #16a34a); }
+  .toast.error { background: linear-gradient(135deg, #7f1d1d, #991b1b); }
   .toast.leaving { animation: toastOut 0.2s ease forwards; }
   @keyframes toastIn { to { opacity: 1; transform: translateY(0) scale(1); } }
   @keyframes toastOut { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
@@ -86,12 +129,36 @@
 </div>
 
 <div id="app">
+  <div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><span class="dot"></span> Baybex<span style="opacity:0.7;">AI</span> Admin</div>
+    <div class="jumpnav" id="jumpnav">
+      <a href="#sec-meta-setup" data-sec="sec-meta-setup"><span class="ico">🔌</span>Meta Setup</a>
+      <a href="#sec-platform-ai" data-sec="sec-platform-ai"><span class="ico">🤖</span>Platform AI</a>
+      <a href="#sec-ai-cost" data-sec="sec-ai-cost"><span class="ico">💰</span>AI Cost</a>
+      <a href="#sec-plans" data-sec="sec-plans"><span class="ico">📦</span>Plans</a>
+      <a href="#sec-website" data-sec="sec-website"><span class="ico">🎨</span>Website</a>
+      <a href="#sec-payments" data-sec="sec-payments"><span class="ico">💳</span>Payments</a>
+      <a href="#sec-tenants" data-sec="sec-tenants"><span class="ico">👥</span>Tenants</a>
+    </div>
+    <div class="sidebar-footer">
+      <button class="secondary" style="width:100%;" onclick="doLogout()">Log out</button>
+    </div>
+  </aside>
+  <div class="main-col">
   <header>
     <strong>Super Admin — all tenants</strong>
-    <button class="secondary" onclick="doLogout()">Log out</button>
   </header>
   <main>
-    <h2>Platform AI</h2>
+    <h2 id="sec-meta-setup">🔌 Connect your Meta App</h2>
+    <div class="card">
+      <p style="color:#6b7280; font-size:13px; margin-top:0;">One Meta App serves every tenant's Facebook Page, Instagram account, and WhatsApp number — you set it up once here. Tenants never see any of this; they just click "Connect" in their own Settings tab.</p>
+      <ul class="setup-steps" id="meta-setup-list"></ul>
+      <p style="color:#9ca3af; font-size:12px; margin-top:14px;">Status refreshes from your server's <code>config.js</code> — nothing here is stored in the database, and no secret values are ever sent to this page.</p>
+      <div style="margin-top:14px;"><a href="https://developers.facebook.com/apps" target="_blank" rel="noopener" style="color:var(--violet-2); font-weight:600; text-decoration:none; font-size:13px;">Open Meta for Developers →</a></div>
+    </div>
+
+    <h2 id="sec-platform-ai">Platform AI</h2>
     <div class="card">
       <p style="color:#6b7280; font-size:13px; margin-top:0;">The only place AI credentials live — every tenant's replies use whichever provider/key/model is set here.</p>
 
@@ -130,13 +197,13 @@
       </div>
     </div>
 
-    <h2>AI Cost</h2>
+    <h2 id="sec-ai-cost">AI Cost</h2>
     <div class="card">
       <p style="color:#6b7280; font-size:13px; margin-top:0;">Real $ cost of every AI reply, computed from each provider's own token counts — not an estimate.</p>
       <div class="row">
-        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-today">—</div><div style="font-size:12px; color:#6b7280;">Today</div></div>
-        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-month">—</div><div style="font-size:12px; color:#6b7280;">This month</div></div>
-        <div class="col" style="text-align:center;"><div style="font-size:24px; font-weight:700;" id="cost-total">—</div><div style="font-size:12px; color:#6b7280;">All time</div></div>
+        <div class="col" style="text-align:center;"><div style="font-size:26px; font-weight:800; background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;" id="cost-today">—</div><div style="font-size:12px; color:#6b7280;">Today</div></div>
+        <div class="col" style="text-align:center;"><div style="font-size:26px; font-weight:800; background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;" id="cost-month">—</div><div style="font-size:12px; color:#6b7280;">This month</div></div>
+        <div class="col" style="text-align:center;"><div style="font-size:26px; font-weight:800; background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;" id="cost-total">—</div><div style="font-size:12px; color:#6b7280;">All time</div></div>
       </div>
       <h4 style="margin-top:20px;">By tenant</h4>
       <table>
@@ -146,7 +213,7 @@
       <div id="cost-empty" class="empty" style="display:none;">No AI usage recorded yet.</div>
     </div>
 
-    <h2>Plans</h2>
+    <h2 id="sec-plans">Plans</h2>
     <div class="card">
       <p style="color:#6b7280; font-size:13px; margin-top:0;">Packages tenants can subscribe to — reply limit, price, and how long an approved payment against it lasts (a "3 month" package extends a tenant 90 days per approved payment, etc). Both price and duration are yours to set and change any time.</p>
       <table>
@@ -175,7 +242,7 @@
       </div>
     </div>
 
-    <h2>Website — public landing page</h2>
+    <h2 id="sec-website">Website — public landing page</h2>
     <div class="card">
       <p style="color:#6b7280; font-size:13px; margin-top:0;">Everything here controls the public site at <code>/</code> — logo, colors, Meta Pixel, hero text, slider, blog, and reviews. Changes go live as soon as you save.</p>
 
@@ -325,19 +392,21 @@
       <div style="margin-top:12px;"><button onclick="addCoupon()">Add coupon</button></div>
     </div>
 
-    <h2>Pending payments</h2>
+    <h2 id="sec-payments">Pending payments</h2>
     <table>
       <thead><tr><th>Business</th><th>Email</th><th>Trx ID</th><th>Amount</th><th>Submitted</th><th></th></tr></thead>
       <tbody id="payment-rows"></tbody>
     </table>
     <div id="payments-empty" class="empty" style="display:none;">No pending payments.</div>
 
-    <h2>Tenants</h2>
+    <h2 id="sec-tenants">Tenants</h2>
     <table>
       <thead><tr><th>Business</th><th>Email</th><th>Plan</th><th>Status</th><th>Trial ends</th><th>Subscription ends</th><th></th><th>Extend</th></tr></thead>
       <tbody id="tenant-rows"></tbody>
     </table>
   </main>
+  </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="tenant-modal-backdrop" onclick="if(event.target===this) closeTenantModal()">
@@ -421,6 +490,7 @@ function showLogin() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  loadMetaStatus();
   loadPlatformSettings();
   loadCosts();
   loadPlans();
@@ -431,17 +501,108 @@ function showApp() {
   loadBlogPosts();
   loadTestimonials();
   loadCoupons();
+  initScrollspy();
+}
+
+// ---- Meta App Setup checklist ----
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = original, 1400);
+  } catch (e) {
+    toast('Could not copy — select and copy manually', 'error');
+  }
+}
+
+async function loadMetaStatus() {
+  const s = await api('/api/superadmin/meta-status');
+  const list = document.getElementById('meta-setup-list');
+  const items = [
+    {
+      ok: s.public_base_url_set,
+      title: 'Public HTTPS domain set',
+      detail: s.public_base_url_set
+        ? 'PUBLIC_BASE_URL is set to <strong>' + escapeHtml(s.public_base_url) + '</strong>.'
+        : 'Set <code>PUBLIC_BASE_URL</code> in <code>config.js</code> to your real HTTPS domain — everything below depends on this.'
+    },
+    {
+      ok: s.fb_app_configured,
+      title: 'Facebook App ID & Secret',
+      detail: s.fb_app_configured
+        ? 'Configured — tenants can use one-click "Connect Facebook Page" (covers Instagram DMs too).'
+        : 'From developers.facebook.com → your app → Settings → Basic, copy the App ID + App Secret into <code>FB_APP_ID</code> / <code>FB_APP_SECRET</code> in <code>config.js</code>.'
+    },
+    {
+      ok: s.fb_webhook_token_set,
+      title: 'Webhook verify token',
+      detail: s.fb_webhook_token_set
+        ? 'A custom verify token is set — paste the URL and token below into your Meta App\'s Webhooks config.'
+        : 'Still on the placeholder value — set <code>FB_WEBHOOK_VERIFY_TOKEN</code> in <code>config.js</code> to any string you choose, then reuse it below.'
+    },
+    {
+      ok: s.wa_embedded_signup_configured,
+      title: 'WhatsApp Embedded Signup',
+      detail: s.wa_embedded_signup_configured
+        ? 'Configuration ID is set — tenants can one-click "Connect WhatsApp".'
+        : 'Optional but recommended: create a Configuration under your Meta App → WhatsApp → Embedded Signup, then set <code>WA_EMBEDDED_SIGNUP_CONFIG_ID</code> in <code>config.js</code>.'
+    }
+  ];
+  list.innerHTML = items.map(it =>
+    '<li><span class="check-dot ' + (it.ok ? 'yes' : 'no') + '">' + (it.ok ? '✓' : '!') + '</span>' +
+    '<div><strong>' + it.title + '</strong><div style="color:#6b7280; font-size:13px; margin-top:2px;">' + it.detail + '</div></div></li>'
+  ).join('');
+
+  if (s.public_base_url_set) {
+    list.innerHTML += '<li><span class="check-dot yes">→</span><div style="flex:1;"><strong>Paste into Meta App → Webhooks</strong>' +
+      '<div class="copy-row"><code id="webhook-url-code">' + escapeHtml(s.webhook_url) + '</code><button class="secondary" onclick="copyText(\'' + s.webhook_url.replace(/'/g, "\\'") + '\', this)">Copy URL</button></div>' +
+      (s.fb_webhook_token_set ? '<div class="copy-row"><code id="webhook-token-code">' + escapeHtml(s.fb_webhook_verify_token) + '</code><button class="secondary" onclick="copyText(\'' + s.fb_webhook_verify_token.replace(/'/g, "\\'") + '\', this)">Copy token</button></div>' : '') +
+      '<div style="color:#9ca3af; font-size:12px; margin-top:6px;">Subscribe to <code>messages</code> on the Page, Instagram, and WhatsApp Business Account webhook fields.</div></div></li>';
+  }
+}
+
+// Highlights the current section in the sidebar jump-nav as you scroll.
+function initScrollspy() {
+  const links = document.querySelectorAll('.jumpnav a');
+  const sections = Array.from(links).map(a => document.getElementById(a.dataset.sec)).filter(Boolean);
+  if (!sections.length || !('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(a => a.classList.toggle('active', a.dataset.sec === entry.target.id));
+      }
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  sections.forEach(sec => observer.observe(sec));
 }
 
 function fmtUsd(n) {
   return '$' + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
+function animateUsd(el, target) {
+  target = target || 0;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = fmtUsd(target);
+    return;
+  }
+  const duration = 650, start = performance.now();
+  function tick(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = fmtUsd(target * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+    else el.textContent = fmtUsd(target);
+  }
+  requestAnimationFrame(tick);
+}
+
 async function loadCosts() {
   const c = await api('/api/superadmin/costs');
-  document.getElementById('cost-today').textContent = fmtUsd(c.today_cost_usd);
-  document.getElementById('cost-month').textContent = fmtUsd(c.this_month_cost_usd);
-  document.getElementById('cost-total').textContent = fmtUsd(c.total_cost_usd);
+  animateUsd(document.getElementById('cost-today'), c.today_cost_usd);
+  animateUsd(document.getElementById('cost-month'), c.this_month_cost_usd);
+  animateUsd(document.getElementById('cost-total'), c.total_cost_usd);
 
   const tbody = document.getElementById('cost-tenant-rows');
   tbody.innerHTML = '';

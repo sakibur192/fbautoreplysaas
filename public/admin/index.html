@@ -5,24 +5,59 @@
 <title>Admin Panel</title>
 <script async defer src="https://connect.facebook.net/en_US/sdk.js"></script>
 <style>
+  :root {
+    --violet: #6d28d9; --violet-2: #4f46e5; --pink: #ec4899; --cyan: #06b6d4;
+    --grad-brand: linear-gradient(135deg, var(--violet-2), var(--violet), var(--pink));
+    --ink: #1a1a2e; --muted: #6b7280; --bg: #f3f2fb; --card-line: #ece9fb;
+    --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
+  }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f5f7; color: #1a1a1a; }
-  #login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; }
-  .card { background: #fff; border-radius: 10px; padding: 28px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-  .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; }
-  .card button, .btn { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-  .btn.danger { background: #dc2626; }
-  .btn.secondary { background: #64748b; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+  #login-screen {
+    display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column;
+    background: radial-gradient(circle at 20% 20%, #4f46e5 0%, transparent 45%),
+                radial-gradient(circle at 85% 80%, #ec4899 0%, transparent 45%),
+                linear-gradient(135deg, #1a1a2e, #241b4d 55%, #1a1a2e);
+  }
+  #login-screen .card { box-shadow: 0 30px 70px -20px rgba(0,0,0,0.55); }
+  .card { background: #fff; border-radius: 14px; padding: 28px; box-shadow: 0 2px 14px rgba(84,49,179,0.08); border: 1px solid var(--card-line); }
+  .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; }
+  .card button, .btn {
+    background: var(--grad-brand); background-size: 160% 160%; color: #fff; border: none;
+    padding: 10px 18px; border-radius: 9px; cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  .btn.danger { background: var(--danger); }
+  .btn.secondary { background: #4b5563; }
   #app { display: none; }
-  header { background: #111827; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
-  nav { display: flex; gap: 4px; background: #fff; padding: 10px 24px; border-bottom: 1px solid #e5e7eb; }
-  nav button { background: none; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; color: #374151; }
-  nav button.active { background: #2563eb; color: #fff; }
-  main { padding: 24px; max-width: 900px; margin: 0 auto; }
+  .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+  .sidebar {
+    width: 228px; flex-shrink: 0; background: linear-gradient(190deg, #1a1a2e 0%, #241b4d 60%, #2c1f5e 100%);
+    color: #fff; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+  }
+  .sidebar-brand { padding: 22px 20px; font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--grad-brand); box-shadow: 0 0 12px 2px rgba(236,72,153,0.8); }
+  .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { background: #fff; border-bottom: 1px solid var(--card-line); color: var(--ink); padding: 16px 28px; display: flex; justify-content: space-between; align-items: center; }
+  header strong { font-size: 16px; }
+  nav { display: flex; flex-direction: column; gap: 3px; padding: 14px 12px; flex: 1; }
+  nav button {
+    background: none; border: none; padding: 11px 14px; border-radius: 9px; cursor: pointer; font-size: 14px;
+    color: rgba(255,255,255,0.75); text-align: left; display: flex; align-items: center; gap: 10px; font-weight: 500;
+    position: relative;
+  }
+  nav button .ico { font-size: 16px; width: 20px; text-align: center; }
+  nav button.active { background: rgba(255,255,255,0.12); color: #fff; }
+  nav button.active::before {
+    content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 4px; border-radius: 4px;
+    background: var(--grad-brand);
+  }
+  .sidebar-footer { padding: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+  main { padding: 28px; max-width: 980px; margin: 0 auto; width: 100%; }
   .tab { display: none; }
   .tab.active { display: block; }
+  h3 { letter-spacing: -0.01em; }
   label { display: block; margin-top: 14px; font-weight: 600; font-size: 13px; color: #374151; }
-  input[type=text], input[type=password], input[type=email], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-top: 4px; font-size: 14px; }
+  input[type=text], input[type=password], input[type=email], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-top: 4px; font-size: 14px; }
   textarea { min-height: 90px; }
   .row { display: flex; gap: 24px; }
   .col { flex: 1; }
@@ -32,23 +67,27 @@
   .badge.qr { background: #fef9c3; color: #854d0e; }
   .badge.disconnected { background: #fee2e2; color: #991b1b; }
   .conv-list { list-style: none; padding: 0; margin: 16px 0; }
-  .conv-list li { background: #fff; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .conv-list li { background: #fff; padding: 12px 16px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 1px 3px rgba(84,49,179,0.08); border: 1px solid var(--card-line); }
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
-  .stat-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); text-align: center; }
-  .stat-card .num { font-size: 28px; font-weight: 700; color: #2563eb; }
-  .stat-card .label { font-size: 12px; color: #6b7280; margin-top: 4px; }
-  .stat-card.paid .num { color: #16a34a; }
-  .stat-card.cancelled .num { color: #dc2626; }
+  .stat-card {
+    background: #fff; border-radius: 12px; padding: 18px 16px; box-shadow: 0 1px 3px rgba(84,49,179,0.08);
+    text-align: center; border: 1px solid var(--card-line); position: relative; overflow: hidden;
+  }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--grad-brand); }
+  .stat-card .num { font-size: 30px; font-weight: 800; background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat-card .label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
+  .stat-card.paid .num { background: linear-gradient(135deg, #16a34a, #22c55e); -webkit-background-clip: text; background-clip: text; }
+  .stat-card.cancelled .num { background: linear-gradient(135deg, #dc2626, #f43f5e); -webkit-background-clip: text; background-clip: text; }
   .plan-card { text-align: left; position: relative; }
-  .plan-card.current { border: 2px solid #2563eb; }
+  .plan-card.current { border: 2px solid transparent; background: linear-gradient(#fff,#fff) padding-box, var(--grad-brand) border-box; }
   .plan-card .plan-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-  .plan-card .plan-price { color: #2563eb; font-weight: 700; font-size: 18px; }
-  .plan-card .plan-limit { color: #6b7280; font-size: 13px; margin: 4px 0 10px; }
+  .plan-card .plan-price { color: var(--violet-2); font-weight: 700; font-size: 18px; }
+  .plan-card .plan-limit { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
   .plan-card .current-badge { position: absolute; top: 10px; right: 10px; background: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
-  .msg-thread { background: #fff; border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto; margin-top: 12px; }
-  .msg { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; max-width: 70%; }
-  .msg.in { background: #e5e7eb; }
-  .msg.out { background: #dbeafe; margin-left: auto; }
+  .msg-thread { background: #fff; border-radius: 10px; padding: 16px; max-height: 400px; overflow-y: auto; margin-top: 12px; border: 1px solid var(--card-line); }
+  .msg { padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; max-width: 70%; }
+  .msg.in { background: #ece9fb; }
+  .msg.out { background: var(--grad-brand); color: #fff; margin-left: auto; }
   .save-msg { color: #166534; font-size: 13px; margin-left: 12px; }
   #qr-box img { width: 220px; height: 220px; }
   #status-banner { padding: 10px 24px; font-size: 14px; font-weight: 600; text-align: center; }
@@ -61,6 +100,14 @@
   .status-pill.pending { background: #fef9c3; color: #854d0e; }
   .status-pill.approved { background: #dcfce7; color: #166534; }
   .status-pill.rejected { background: #fee2e2; color: #991b1b; }
+  @media (max-width: 860px) {
+    .app-shell { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: relative; flex-direction: row; overflow-x: auto; }
+    .sidebar-brand { display: none; }
+    nav { flex-direction: row; padding: 8px; }
+    nav button.active::before { display: none; }
+    .sidebar-footer { display: none; }
+  }
 </style>
 
 <style>
@@ -69,18 +116,20 @@
 
   button, .btn { cursor: pointer; }
   button:not(:disabled):active, .btn:not(:disabled):active { transform: scale(0.97); }
-  .btn:not(.secondary):not(.danger):hover { box-shadow: 0 4px 12px rgba(37,99,235,0.28); transform: translateY(-1px); }
+  .btn:not(.secondary):not(.danger) { background-position: 0% 50%; }
+  .btn:not(.secondary):not(.danger):hover { box-shadow: 0 8px 22px -6px rgba(109,40,217,0.55); transform: translateY(-1px); background-position: 100% 50%; }
   .btn:not(.secondary):not(.danger):active { transform: translateY(0) scale(0.97); }
 
   .card, .stat-card, .conv-list li, .plan-card { transition: box-shadow 0.2s ease, transform 0.2s ease; }
-  .stat-card:hover, .plan-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.08); transform: translateY(-2px); }
-  .conv-list li:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateX(2px); }
+  .card:hover { box-shadow: 0 10px 28px -10px rgba(84,49,179,0.18); }
+  .stat-card:hover, .plan-card:hover { box-shadow: 0 10px 26px -6px rgba(84,49,179,0.22); transform: translateY(-3px); }
+  .conv-list li:hover { box-shadow: 0 8px 20px -4px rgba(84,49,179,0.18); transform: translateX(2px); }
 
   input[type=text], input[type=email], input[type=password], input[type=number], textarea, select {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   input:focus, textarea:focus, select:focus {
-    outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    outline: none; border-color: var(--violet-2, #4f46e5); box-shadow: 0 0 0 3px rgba(79,70,229,0.15);
   }
 
   /* Tab content fade-in on switch */
@@ -91,7 +140,7 @@
   }
 
   nav button { transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease; }
-  nav button:hover:not(.active) { background: #f1f5f9; }
+  nav button:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
   nav button:active { transform: scale(0.96); }
 
   /* Skeleton loading pulse for stat numbers before data arrives */
@@ -161,19 +210,26 @@
     <button class="btn secondary" style="padding:4px 12px;" onclick="exitImpersonation()">Exit to Super Admin</button>
   </div>
   <div id="status-banner"></div>
+  <div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><span class="dot"></span> Baybex<span style="opacity:0.7;">AI</span></div>
+    <nav>
+    <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')"><span class="ico">📊</span>Dashboard</button>
+    <button class="tab-btn" data-tab="settings" onclick="showTab('settings')"><span class="ico">⚙️</span>Settings</button>
+    <button class="tab-btn" data-tab="products" onclick="showTab('products')"><span class="ico">🛍️</span>Products</button>
+    <button class="tab-btn" data-tab="orders" onclick="showTab('orders')"><span class="ico">📦</span>Orders</button>
+    <button class="tab-btn" data-tab="conversations" onclick="showTab('conversations')"><span class="ico">💬</span>Conversations</button>
+    <button class="tab-btn" data-tab="billing" onclick="showTab('billing')"><span class="ico">💳</span>Billing</button>
+    <button class="tab-btn" data-tab="profile" onclick="showTab('profile')"><span class="ico">👤</span>Profile</button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="btn secondary" style="width:100%;" onclick="doLogout()">Log out</button>
+    </div>
+  </aside>
+  <div class="main-col">
   <header>
     <strong id="header-business-name">Admin Panel</strong>
-    <button class="btn secondary" onclick="doLogout()">Log out</button>
   </header>
-  <nav>
-    <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
-    <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">Settings</button>
-    <button class="tab-btn" data-tab="products" onclick="showTab('products')">Products</button>
-    <button class="tab-btn" data-tab="orders" onclick="showTab('orders')">Orders</button>
-    <button class="tab-btn" data-tab="conversations" onclick="showTab('conversations')">Conversations</button>
-    <button class="tab-btn" data-tab="billing" onclick="showTab('billing')">Billing</button>
-    <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">Profile</button>
-  </nav>
 
   <main>
     <!-- DASHBOARD TAB -->
@@ -508,6 +564,8 @@
       </div>
     </div>
   </main>
+  </div>
+  </div>
 </div>
 
 <div id="fb-page-picker-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); align-items:center; justify-content:center; z-index:50;">
@@ -757,7 +815,29 @@ function showTab(name) {
 function setStat(id, value) {
   const el = document.getElementById(id);
   el.classList.remove('skeleton');
-  el.textContent = value;
+  const target = typeof value === 'number' ? value : parseInt(value, 10);
+  if (isNaN(target)) { el.textContent = value; return; }
+  animateCount(el, target);
+}
+
+// Smooth count-up animation for dashboard numbers — small, GPU-cheap, and
+// respects prefers-reduced-motion by jumping straight to the final value.
+function animateCount(el, target) {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = target.toLocaleString();
+    return;
+  }
+  const duration = 650;
+  const start = performance.now();
+  const from = 0;
+  function tick(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(from + (target - from) * eased).toLocaleString();
+    if (progress < 1) requestAnimationFrame(tick);
+    else el.textContent = target.toLocaleString();
+  }
+  requestAnimationFrame(tick);
 }
 
 async function loadDashboard() {

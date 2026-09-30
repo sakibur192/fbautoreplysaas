@@ -30,27 +30,40 @@
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
   header.site {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 22px 28px; max-width: 1080px; margin: 0 auto;
+    padding: 18px 28px; max-width: 1080px; margin: 0 auto;
+    position: sticky; top: 0; z-index: 40; backdrop-filter: blur(10px);
+    background: rgba(250,247,240,0.78); transition: box-shadow 0.25s ease;
   }
+  header.site.scrolled { box-shadow: 0 6px 24px -14px rgba(20,35,31,0.35); }
   .brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; text-decoration: none; color: var(--ink); display: flex; align-items: center; gap: 9px; }
   .brand span { color: var(--teal); }
   .brand img { height: 30px; width: auto; display: block; }
-  header.site a.login { font-size: 14px; font-weight: 600; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+  header.site a.login {
+    font-size: 14px; font-weight: 600; text-decoration: none; color: #fff;
+    background: linear-gradient(135deg, var(--teal), #133f37); padding: 9px 18px; border-radius: 999px;
+  }
   header.site nav { display: flex; align-items: center; gap: 22px; }
   header.site nav a.navlink { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--sage); }
 
-  .hero { padding: 40px 0 70px; }
+  .hero { padding: 50px 0 70px; position: relative; overflow: hidden; }
+  .hero::before, .hero::after {
+    content: ''; position: absolute; border-radius: 50%; filter: blur(60px); z-index: -1; opacity: 0.35;
+    animation: driftBlob 14s ease-in-out infinite alternate;
+  }
+  .hero::before { width: 420px; height: 420px; background: var(--teal); top: -160px; right: -120px; }
+  .hero::after { width: 320px; height: 320px; background: var(--gold); bottom: -140px; left: -80px; animation-delay: -6s; }
+  @keyframes driftBlob { from { transform: translate(0,0) scale(1); } to { transform: translate(24px,-18px) scale(1.08); } }
   .hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
   .hero h1 { font-size: 44px; max-width: 480px; }
   .hero p.lede { font-size: 17px; color: var(--sage); max-width: 440px; margin-top: 18px; }
 
   .cta-inline { margin-top: 30px; display: flex; gap: 12px; flex-wrap: wrap; }
   .btn {
-    display: inline-block; background: var(--gold); color: #241605; font-weight: 600;
-    padding: 13px 26px; border-radius: 3px; border: none; cursor: pointer; font-size: 15px;
-    text-decoration: none; font-family: 'Inter', sans-serif;
+    display: inline-block; background: linear-gradient(135deg, var(--gold), #e0a83f); background-size: 160% 160%;
+    color: #241605; font-weight: 700; padding: 13px 26px; border-radius: 999px; border: none; cursor: pointer;
+    font-size: 15px; text-decoration: none; font-family: 'Inter', sans-serif; position: relative;
   }
-  .btn.outline { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .btn.outline { background: transparent; color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; }
 
   /* chat mockup */
   .mockup {
@@ -141,8 +154,8 @@
 </style>
 
 <style>
-  .btn { transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease; }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -4px rgba(201,138,44,0.45); }
+  .btn { transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-position 0.4s ease; }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -8px rgba(201,138,44,0.55); background-position: 100% 50%; }
   .btn:active { transform: translateY(0) scale(0.98); }
   .btn:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
   form.signup-form input {
@@ -158,8 +171,28 @@
     border-top-color: #241605; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 7px; vertical-align: -2px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scroll-reveal: elements start hidden/offset and fade up into place the
+     first time they enter the viewport (see the IntersectionObserver at
+     the bottom of the page). Falls back to always-visible if JS is off. */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+  .reveal.d1 { transition-delay: 0.08s; }
+  .reveal.d2 { transition-delay: 0.16s; }
+  .reveal.d3 { transition-delay: 0.24s; }
+
+  .card, .stat-card, .testi-card, .blog-card, .price-card, .step, .mockup {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .testi-card:hover, .blog-card:hover, .price-card:hover { transform: translateY(-4px); box-shadow: 0 16px 34px -18px rgba(20,35,31,0.35); }
+  .mockup { animation: floatMockup 5s ease-in-out infinite; }
+  @keyframes floatMockup { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .mockup .platform-tag::before { content: '● '; color: #2ecc71; animation: pulseDot 1.6s ease-in-out infinite; }
+  @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
   @media (prefers-reduced-motion: reduce) {
-    *, .btn, #signup-error, #signup-success, .spinner { animation: none !important; transition: none !important; }
+    *, .btn, #signup-error, #signup-success, .spinner, .mockup, .hero::before, .hero::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1 !important; transform: none !important; }
   }
 </style>
 </head>
@@ -196,19 +229,19 @@
 
 <section class="steps">
   <div class="wrap">
-    <h2 id="steps-headline">Set up once, running in an afternoon.</h2>
+    <h2 id="steps-headline" class="reveal">Set up once, running in an afternoon.</h2>
     <div class="step-list">
-      <div class="step">
+      <div class="step reveal">
         <div class="num">01</div>
         <h3 id="step1-title">Connect your Page and number</h3>
         <p id="step1-body">Link your Facebook Page and connect WhatsApp — no coding, no approval wait.</p>
       </div>
-      <div class="step">
+      <div class="step reveal d1">
         <div class="num">02</div>
         <h3 id="step2-title">Add your products</h3>
         <p id="step2-body">List what you sell, prices, and details. This becomes the only source the AI answers from.</p>
       </div>
-      <div class="step">
+      <div class="step reveal d2">
         <div class="num">03</div>
         <h3 id="step3-title">Let it answer</h3>
         <p id="step3-body">Every incoming message gets a reply in your shop's voice. Take over any conversation yourself, anytime.</p>
@@ -218,7 +251,7 @@
 </section>
 
 <section class="pricing" id="pricing">
-  <div class="wrap" id="pricing-wrap">
+  <div class="wrap reveal" id="pricing-wrap">
     <div class="price-card">
       <div class="amount">৳1,000 <small>/ month</small></div>
       <ul>
@@ -235,14 +268,14 @@
 </section>
 
 <section class="testimonials" id="testimonials-section" style="display:none;">
-  <div class="wrap">
+  <div class="wrap reveal">
     <h2>What businesses using it say</h2>
     <div class="testi-grid" id="testi-grid"></div>
   </div>
 </section>
 
 <section class="blog" id="blog-section" style="display:none;">
-  <div class="wrap">
+  <div class="wrap reveal">
     <div class="blog-head">
       <h2>From the blog</h2>
       <a href="/blog" class="navlink" style="color:var(--teal); font-weight:600; text-decoration:none; font-size:14px;">View all posts →</a>
@@ -252,7 +285,7 @@
 </section>
 
 <section class="signup" id="signup">
-  <div class="wrap signup-grid">
+  <div class="wrap signup-grid reveal">
     <div>
       <h2>Start your free trial</h2>
       <p>Three days, full access, nothing to pay yet. Set up your shop and see real replies go out before you decide.</p>
@@ -434,6 +467,36 @@ async function loadSiteContent() {
   }
 }
 loadSiteContent();
+
+// Sticky header gets a subtle shadow once the page has scrolled.
+window.addEventListener('scroll', () => {
+  document.querySelector('header.site').classList.toggle('scrolled', window.scrollY > 8);
+}, { passive: true });
+
+// Fade sections/cards up into view the first time they're scrolled to.
+// Runs once per element, and skips entirely if the browser lacks support
+// (everything just renders visible via the .reveal base state fallback
+// isn't needed since without JS these elements simply keep opacity:0 —
+// so only proceed when IntersectionObserver actually exists).
+if ('IntersectionObserver' in window) {
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in');
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  function observeReveals() {
+    document.querySelectorAll('.reveal:not(.in)').forEach(el => revealObserver.observe(el));
+  }
+  observeReveals();
+  // Testimonials/blog sections render their .reveal wrap after an async
+  // fetch and start at display:none, so re-scan shortly after load too.
+  setTimeout(observeReveals, 600);
+} else {
+  document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+}
 </script>
 </body>
 </html>

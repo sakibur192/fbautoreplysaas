@@ -103,6 +103,8 @@ Tenants pick and switch plans themselves from their **Billing** tab — no appro
 
 ## Connecting Facebook, Instagram & WhatsApp — one-click for tenants, real setup for you
 
+**Start in `/superadmin` → Meta Setup.** It's the first thing you see after logging in — a live checklist (green ✓ / red !) showing exactly which of the four `config.js` values below are filled in, plus the exact webhook URL and verify token to paste into your Meta App, each with a one-click Copy button. No secret values are ever sent to that page — only whether each one is set. Work through the steps below in order, refresh that panel as you go, and it'll tell you what's still missing.
+
 Tenants no longer copy-paste Page IDs or tokens. They click **Connect Facebook Page** / **Connect WhatsApp**, authorize through Meta's own popup, and pick their Page or number — Instagram then just needs a toggle, since it rides on the same Page connection. Manual entry still exists as a fallback link on both, in case a tenant already has their own separate Meta App setup, or your OAuth isn't configured yet.
 
 **This shifts the setup burden to you, once, instead of to every tenant, every time.** Two different levels of Meta-side work:
