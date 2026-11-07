@@ -1099,6 +1099,7 @@ app.use('/superadmin', express.static(path.join(__dirname, 'public/superadmin'))
 // Blog list/post pages are static HTML that fetch their content from the
 // API above — these explicit routes exist so /blog/some-post-slug resolves
 // to that page (static file serving alone can't match a path parameter).
+for (const pg of ['privacy', 'terms', 'data-deletion']) app.get('/' + pg, (req, res) => res.sendFile(path.join(__dirname, 'public/landing/' + pg + '.html')));
 app.get('/blog', (req, res) => res.sendFile(path.join(__dirname, 'public/landing/blog.html')));
 app.get('/blog/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public/landing/blog-post.html')));
 app.use('/', express.static(path.join(__dirname, 'public/landing')));

@@ -79,6 +79,9 @@ If an AI call fails for any reason — no key configured anywhere, an invalid ke
 
 Note: `db.getSettings()` always merges in sensible defaults for any setting a tenant's row doesn't have yet — this matters because the list of settings has grown over time, so a tenant created before a given field existed (e.g. `fallback_message`) would otherwise get `undefined` for it instead of the default, which broke the fallback reply itself in an early version of this feature. Fixed now, but worth knowing if you ever add a new per-tenant setting: always add it to `DEFAULT_SETTINGS` in `db.js` rather than assuming existing tenants will have it.
 
+## Legal pages (needed for Meta App Review)
+`/privacy`, `/terms` and `/data-deletion` are built in (files in `public/landing/`) and linked from the landing footer. In your Meta app → Settings → Basic use `https://YOUR-DOMAIN/privacy` as the Privacy Policy URL, `/terms` as Terms of Service URL and `/data-deletion` as the User Data Deletion URL. They list `support@baybexai.digital` as the contact — change it (search the three files) if you use another address, and have them reviewed before going live.
+
 ## Dashboards (tenant and super admin)
 **Tenant Dashboard:** subscription banner, a "get your bot working" checklist (connect a channel, customise the AI, add products, first message), KPI tiles with change versus the previous period, and charts for AI replies, customer messages, busiest hours, channel split, order value and best sellers, with a 7 / 14 / 30 day switch. Backed by `GET /api/analytics?days=`.
 
