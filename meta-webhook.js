@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-const config = require('./config');
+const metaconfig = require('./metaconfig');
 const db = require('./db');
 const ai = require('./ai');
 const { humanDelay } = require('./pacing');
@@ -11,12 +11,13 @@ const router = express.Router();
 // --- Webhook verification (Meta calls this once when you set this URL up) ---
 // One Meta App, one verify token, covers both the Messenger and the
 // WhatsApp Business Account webhook subscriptions.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === config.FB_WEBHOOK_VERIFY_TOKEN) {
+  const mc = await metaconfig.getMetaConfig();
+  if (mode === 'subscribe' && mc.verifyToken && token === mc.verifyToken) {
     return res.status(200).send(challenge);
   }
   return res.sendStatus(403);
@@ -24,6 +25,18 @@ router.get('/', (req, res) => {
 
 // --- Incoming events, from ANY tenant's Page or WhatsApp number ---
 router.post('/', async (req, res) => {
+  // When the App Secret is set, only requests Meta actually signed are
+  // accepted — anyone else who finds this URL can't feed it fake messages.
+  // With no secret saved yet, behaviour is unchanged (accepted unsigned).
+  const mc = await metaconfig.getMetaConfig();
+  if (mc.appSecret) {
+    const signature = req.get('x-hub-signature-256');
+    if (!metaconfig.verifySignature(req.rawBody, signature, mc.appSecret)) {
+      console.warn('[meta-webhook] rejected a request with a missing/invalid signature');
+      return res.sendStatus(403);
+    }
+  }
+
   res.sendStatus(200); // ack immediately so Meta doesn't retry
 
   try {
@@ -190,7 +203,7 @@ async function handleInstagramEntries(entries) {
 async function sendFacebookMessage(pageAccessToken, psid, text) {
   if (!pageAccessToken) throw new Error('Facebook Page Access Token is not set.');
   await axios.post(
-    `https://graph.facebook.com/v19.0/me/messages`,
+    `${metaconfig.GRAPH}/me/messages`,
     { recipient: { id: psid }, message: { text } },
     { params: { access_token: pageAccessToken } }
   );
@@ -290,7 +303,7 @@ async function sendWhatsappCloudMessage(phoneNumberId, accessToken, to, text) {
     throw new Error('WhatsApp Cloud API Phone Number ID / Access Token is not set.');
   }
   await axios.post(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+    `${metaconfig.GRAPH}/${phoneNumberId}/messages`,
     { messaging_product: 'whatsapp', to, type: 'text', text: { body: text } },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );

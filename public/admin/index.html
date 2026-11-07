@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <title>Admin Panel</title>
 <script async defer src="https://connect.facebook.net/en_US/sdk.js"></script>
+<script src="/shared/charts.js"></script>
 <style>
   :root {
     --violet: #6d28d9; --violet-2: #4f46e5; --pink: #ec4899; --cyan: #06b6d4;
@@ -190,6 +191,34 @@
     *, .tab.active, .toast, .modal-backdrop .modal { animation: none !important; transition: none !important; }
   }
 </style>
+<style>
+  .dash-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .dash-head h3 { margin:0; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+  .kpi { background:#fff; border:1px solid var(--card-line, #e8e6f5); border-radius:14px; padding:16px 18px; box-shadow:0 2px 14px rgba(84,49,179,.06); transition:transform .2s, box-shadow .2s; }
+  .kpi:hover { transform:translateY(-3px); box-shadow:0 14px 30px -12px rgba(84,49,179,.3); }
+  .kpi .lbl { font-size:12px; color:#6b7280; font-weight:600; }
+  .kpi .val { font-size:27px; font-weight:800; letter-spacing:-.02em; margin-top:2px; }
+  .kpi .sub { font-size:12px; color:#6b7280; margin-top:4px; }
+  .chart-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
+  @media (max-width:900px){ .chart-grid{ grid-template-columns:1fr; } }
+  .chart-card h4 { margin:0 0 12px; font-size:14px; display:flex; justify-content:space-between; align-items:baseline; }
+  .chart-card h4 small { font-weight:500; color:#6b7280; font-size:12px; }
+  .setup-card { border:1px solid #c4b5fd; background:linear-gradient(180deg,#faf8ff,#fff); }
+  .setup-item { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid #f1f5f9; font-size:14px; }
+  .setup-item:first-of-type { border-top:none; }
+  .setup-item .dot { width:22px; height:22px; border-radius:50%; background:#e5e7eb; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .setup-item.done .dot { background:#16a34a; }
+  .setup-item.done .txt { color:#6b7280; text-decoration:line-through; }
+  .setup-item .txt { flex:1; }
+  .sub-banner { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 16px; border-radius:12px; font-size:14px; margin-bottom:14px; }
+  .sub-banner.trial { background:#ecfeff; border:1px solid #a5f3fc; color:#155e75; }
+  .sub-banner.paid { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+  .sub-banner.warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+  .sub-banner.bad { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+  .bar-track { background:#f1f5f9; border-radius:6px; height:10px; margin-top:8px; overflow:hidden; }
+  .bar-track > div { height:100%; border-radius:6px; transition:width .7s; }
+</style>
 </head>
 <body>
 
@@ -234,63 +263,30 @@
   <main>
     <!-- DASHBOARD TAB -->
     <div class="tab active" id="tab-dashboard">
-      <div class="card">
-        <h3>Plan</h3>
-        <div id="plan-summary" style="margin-top:10px; font-size:14px;"></div>
-        <div style="background:#f1f5f9; border-radius:6px; height:10px; margin-top:10px; overflow:hidden;">
-          <div id="plan-usage-bar" style="background:#2563eb; height:100%; width:0%;"></div>
+      <div id="sub-banner"></div>
+      <div id="setup-box"></div>
+      <div class="dash-head">
+        <h3>Your business at a glance</h3>
+        <div class="bx-range" id="range-switch">
+          <button data-d="7" onclick="setRange(7)">7 days</button>
+          <button data-d="14" class="on" onclick="setRange(14)">14 days</button>
+          <button data-d="30" onclick="setRange(30)">30 days</button>
         </div>
-        <p style="margin-top:10px;"><a href="#" onclick="showTab('billing'); return false;">Manage plan →</a></p>
       </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h3>Overview</h3>
-        <div class="stat-grid" style="margin-top:14px;">
-          <div class="stat-card">
-            <div class="num" id="stat-total-replies">—</div>
-            <div class="label">Total replies sent</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-replies-today">—</div>
-            <div class="label">Replies today</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-total-conversations">—</div>
-            <div class="label">Conversations</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-fb-conversations">—</div>
-            <div class="label">Facebook chats</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-ig-conversations">—</div>
-            <div class="label">Instagram chats</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-wa-conversations">—</div>
-            <div class="label">WhatsApp chats</div>
-          </div>
-        </div>
-
-        <h3 style="margin-top:26px;">Orders</h3>
-        <div class="stat-grid" style="margin-top:14px;">
-          <div class="stat-card">
-            <div class="num" id="stat-orders-total">—</div>
-            <div class="label">Total orders</div>
-          </div>
-          <div class="stat-card">
-            <div class="num" id="stat-orders-confirmed">—</div>
-            <div class="label">Awaiting payment</div>
-          </div>
-          <div class="stat-card paid">
-            <div class="num" id="stat-orders-paid">—</div>
-            <div class="label">Paid</div>
-          </div>
-          <div class="stat-card cancelled">
-            <div class="num" id="stat-orders-cancelled">—</div>
-            <div class="label">Cancelled</div>
-          </div>
-        </div>
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="chart-grid">
+        <div class="card chart-card"><h4>AI replies <small>per day</small></h4><div id="ch-replies"></div></div>
+        <div class="card chart-card"><h4>Customer messages <small>per day</small></h4><div id="ch-inbound"></div></div>
+        <div class="card chart-card"><h4>When customers write <small>by hour of day</small></h4><div id="ch-hours"></div></div>
+        <div class="card chart-card"><h4>Where they write from</h4><div id="ch-platform"></div></div>
+        <div class="card chart-card"><h4>Order value <small>৳ per day</small></h4><div id="ch-orders"></div></div>
+        <div class="card chart-card"><h4>Best sellers <small>units ordered</small></h4><div id="ch-items"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h4 style="margin:0 0 4px; font-size:14px;">Reply allowance this cycle</h4>
+        <div id="plan-summary" style="font-size:14px; margin-top:8px;"></div>
+        <div class="bar-track"><div id="plan-usage-bar" style="width:0%; background:#2563eb;"></div></div>
+        <p style="margin:10px 0 0;"><a href="#" onclick="showTab('billing'); return false;">Manage plan →</a></p>
       </div>
     </div>
 
@@ -599,7 +595,7 @@ const publicConfigPromise = fetch('/api/public-config').then(r => r.json()).catc
 window.fbAsyncInit = function () {
   publicConfigPromise.then((cfg) => {
     if (!cfg.fb_app_id || typeof FB === 'undefined') return;
-    FB.init({ appId: cfg.fb_app_id, xfbml: false, version: 'v19.0' });
+    FB.init({ appId: cfg.fb_app_id, xfbml: false, version: cfg.graph_version || 'v23.0' });
   });
 };
 
@@ -679,7 +675,9 @@ async function maybeSubmitWhatsappSignup() {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   });
   if (res.ok) {
+    const okData = await res.json().catch(() => ({}));
     loadSettings();
+    if (okData.warning) alert(okData.warning);
   } else {
     const data = await res.json().catch(() => ({}));
     alert('Could not connect WhatsApp: ' + (data.error || 'unknown error'));
@@ -709,12 +707,15 @@ function showPagePickerModal(pages) {
     btn.style.cssText = 'display:block; width:100%; margin-bottom:8px; text-align:left;';
     btn.textContent = p.name;
     btn.onclick = async () => {
-      await fetch('/api/connect/facebook/select-page', {
+      const r = await fetch('/api/connect/facebook/select-page', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page_id: p.id })
       });
+      const out = await r.json().catch(() => ({}));
       closeModalBackdrop('fb-page-picker-backdrop');
       loadSettings();
-      toast('Facebook Page connected');
+      if (!r.ok) alert(out.error || 'Could not connect that Page.');
+      else if (out.warning) alert(out.warning);
+      else toast('Facebook Page connected');
     };
     list.appendChild(btn);
   });
@@ -840,26 +841,90 @@ function animateCount(el, target) {
   requestAnimationFrame(tick);
 }
 
+let dashDays = 14;
+function setRange(d) {
+  dashDays = d;
+  document.querySelectorAll('#range-switch button').forEach(b => b.classList.toggle('on', parseInt(b.dataset.d, 10) === d));
+  loadDashboard();
+}
+
+function animateTo(el, target, fmt) {
+  target = Number(target) || 0;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = fmt(target); return; }
+  const start = performance.now();
+  (function tick(now) {
+    const p = Math.min(1, (now - start) / 700), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(target * e);
+    if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target);
+  })(start);
+}
+
+function renderSetup(setup) {
+  const items = [
+    { done: setup.any_channel, txt: 'Connect Facebook, Instagram or WhatsApp', tab: 'settings' },
+    { done: setup.instructions_customised, txt: 'Tell the AI about your business (personality &amp; rules)', tab: 'settings' },
+    { done: setup.products > 0, txt: 'Add your products &amp; prices', tab: 'products' },
+    { done: setup.has_conversation, txt: 'Receive your first customer message', tab: null }
+  ];
+  const left = items.filter(i => !i.done).length;
+  const box = document.getElementById('setup-box');
+  if (!left) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="card setup-card" style="margin-bottom:14px;"><h4 style="margin:0 0 6px; font-size:15px;">🚀 Get your bot working — ' + left + ' step' + (left === 1 ? '' : 's') + ' left</h4>' +
+    items.map(i => '<div class="setup-item ' + (i.done ? 'done' : '') + '"><span class="dot">' + (i.done ? '✓' : '') + '</span><span class="txt">' + i.txt + '</span>' +
+      (!i.done && i.tab ? '<button class="btn" onclick="showTab(\'' + i.tab + '\')">Open</button>' : '') + '</div>').join('') + '</div>';
+}
+
+function renderSubscription(sub, hasPlan) {
+  const el = document.getElementById('sub-banner');
+  let cls = 'trial', msg = '';
+  if (sub.state === 'suspended') { cls = 'bad'; msg = '<span>Your account is suspended. Please contact support.</span>'; }
+  else if (sub.state === 'expired') { cls = 'bad'; msg = '<span><strong>Your access has ended</strong> — the bot is not replying. Renew to switch it back on.</span><button class="btn" onclick="showTab(\'billing\')">Renew now</button>'; }
+  else {
+    const soon = sub.days_left <= 3;
+    cls = soon ? 'warn' : (sub.state === 'paid' ? 'paid' : 'trial');
+    msg = '<span><strong>' + (sub.state === 'paid' ? 'Subscription active' : 'Free trial') + '</strong> — ' + sub.days_left + ' day' + (sub.days_left === 1 ? '' : 's') + ' left</span>' +
+      (sub.state === 'trial' || soon ? '<button class="btn" onclick="showTab(\'billing\')">' + (sub.state === 'trial' ? 'Choose a plan' : 'Renew') + '</button>' : '');
+  }
+  el.innerHTML = '<div class="sub-banner ' + cls + '">' + msg + '</div>';
+}
+
 async function loadDashboard() {
-  document.querySelectorAll('#tab-dashboard .num').forEach((el) => el.classList.add('skeleton'));
-  const d = await api('/api/dashboard');
-  setStat('stat-total-replies', d.total_ai_replies);
-  setStat('stat-replies-today', d.ai_replies_today);
-  setStat('stat-total-conversations', d.total_conversations);
-  setStat('stat-fb-conversations', d.conversations_by_platform.facebook || 0);
-  setStat('stat-ig-conversations', d.conversations_by_platform.instagram || 0);
-  setStat('stat-wa-conversations', d.conversations_by_platform.whatsapp || 0);
-  setStat('stat-orders-total', d.total_orders);
-  setStat('stat-orders-confirmed', d.orders_by_status.confirmed || 0);
-  setStat('stat-orders-paid', d.orders_by_status.paid || 0);
-  setStat('stat-orders-cancelled', d.orders_by_status.cancelled || 0);
+  let a, d;
+  try {
+    [a, d] = await Promise.all([api('/api/analytics?days=' + dashDays), api('/api/dashboard')]);
+  } catch (e) { return; }
+  if (!a || a.error) return;
+  const t = a.totals, p = a.previous;
+  renderSetup(a.setup);
+  renderSubscription(a.subscription, !!d.plan);
+
+  const tiles = [
+    { lbl: 'AI replies sent', raw: t.ai_replies, fmt: BX.fmtNum, d: BX.deltaHtml(t.ai_replies, p.ai_replies), sub: (a.ai_share === null ? 'no replies yet' : a.ai_share + '% of replies handled by AI') },
+    { lbl: 'Customer messages', raw: t.inbound, fmt: BX.fmtNum, d: BX.deltaHtml(t.inbound, p.inbound), sub: 'received in this period' },
+    { lbl: 'New conversations', raw: t.new_conversations, fmt: BX.fmtNum, d: BX.deltaHtml(t.new_conversations, p.new_conversations), sub: BX.fmtNum(d.total_conversations) + (d.total_conversations === 1 ? ' conversation' : ' conversations') + ' in total' },
+    { lbl: 'Orders', raw: t.orders, fmt: BX.fmtNum, d: BX.deltaHtml(t.orders, p.orders), sub: (d.orders_by_status.confirmed || 0) + ' awaiting payment' },
+    { lbl: 'Order value', raw: t.order_value, fmt: BX.fmtMoney, d: BX.deltaHtml(t.order_value, p.order_value), sub: BX.fmtMoney(t.paid_value) + ' paid' }
+  ];
+  document.getElementById('kpi-grid').innerHTML = tiles.map((x, i) =>
+    '<div class="kpi"><div class="lbl">' + x.lbl + '</div><div class="val" id="kv-' + i + '">' + x.fmt(0) + '</div><div>' + x.d + '</div><div class="sub">' + x.sub + '</div></div>').join('');
+  tiles.forEach((x, i) => animateTo(document.getElementById('kv-' + i), x.raw, x.fmt));
+
+  BX.area(document.getElementById('ch-replies'), a.days, a.series.ai_replies, { color: '#7c3aed', unit: 'replies', empty: 'No AI replies in this period yet' });
+  BX.bars(document.getElementById('ch-inbound'), a.days, a.series.inbound, { color: '#06b6d4', unit: 'messages', empty: 'No customer messages in this period yet' });
+  BX.hours(document.getElementById('ch-hours'), a.by_hour);
+  BX.donut(document.getElementById('ch-platform'), [
+    { label: 'Facebook', value: a.by_platform.facebook, color: '#2563eb' },
+    { label: 'Instagram', value: a.by_platform.instagram, color: '#ec4899' },
+    { label: 'WhatsApp', value: a.by_platform.whatsapp, color: '#16a34a' }
+  ], { center: BX.fmtNum(t.inbound), centerLabel: 'messages', empty: 'No customer messages yet' });
+  BX.bars(document.getElementById('ch-orders'), a.days, a.series.order_value, { color: '#f59e0b', tipFmt: BX.fmtMoney, axisFmt: v => v >= 1000 ? Math.round(v / 100) / 10 + 'k' : String(Math.round(v)), empty: 'No orders in this period yet' });
+  BX.hbars(document.getElementById('ch-items'), a.top_items.map(x => ({ label: x.name, value: x.qty, text: x.qty + ' sold' })), { empty: 'No orders yet' });
 
   const summary = document.getElementById('plan-summary');
   const bar = document.getElementById('plan-usage-bar');
   if (d.plan) {
     const pct = d.usage.limit ? Math.min(100, Math.round((d.usage.used / d.usage.limit) * 100)) : 0;
-    summary.innerHTML = '<strong>' + escapeHtml(d.plan.name) + '</strong> — ৳' + d.plan.price_bdt + '/month · ' +
-      d.usage.used + ' / ' + d.usage.limit + ' replies used this cycle';
+    summary.innerHTML = '<strong>' + escapeHtml(d.plan.name) + '</strong> — ৳' + d.plan.price_bdt + '/month · ' + d.usage.used + ' / ' + d.usage.limit + ' replies used (' + pct + '%)';
     bar.style.width = pct + '%';
     bar.style.background = pct >= 100 ? '#dc2626' : (pct >= 80 ? '#d97706' : '#2563eb');
   } else {

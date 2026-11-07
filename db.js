@@ -271,6 +271,17 @@ const DEFAULT_PLATFORM_SETTINGS = {
   // tenants never see or handle an access token themselves.
   platform_wa_system_user_token: '',
 
+  // ---- Meta App settings, edited in /superadmin → Meta Setup. Blank means
+  // "fall back to config.js" (see metaconfig.js). Stored as plain key/value
+  // rows like the AI keys above, so they need no schema migration.
+  meta_public_base_url: '',
+  meta_app_id: '',
+  meta_app_secret: '',
+  meta_webhook_verify_token: '',
+  meta_wa_config_id: '',
+  // JSON of the manual "I did this in Meta's dashboard" ticks in the checklist.
+  meta_checklist_json: '{}',
+
   // ---- Public marketing-site content (logo, colors, hero copy, Meta
   // Pixel, etc.) — everything here is editable from /superadmin → Website
   // and rendered live on the public landing page. Kept as one JSON blob

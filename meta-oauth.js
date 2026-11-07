@@ -1,25 +1,41 @@
 const express = require('express');
 const axios = require('axios');
-const config = require('./config');
 const db = require('./db');
+const metaconfig = require('./metaconfig');
 
 const router = express.Router();
-const FB_GRAPH = 'https://graph.facebook.com/v19.0';
+const FB_GRAPH = metaconfig.GRAPH;
 
 function requireTenantSession(req, res, next) {
   if (req.session && req.session.tenantId) return next();
   return res.redirect('/admin'); // bounce to login if the session was lost mid-flow
 }
 
+const SUBSCRIBE_FAILED_MSG = "Your Page is connected, but we couldn't switch on message delivery for it. Please disconnect and connect again, and contact support if it keeps happening.";
+
+// Each connected Page must also be subscribed to our app, otherwise Meta
+// never sends us that Page's messages. Failure is logged but never blocks
+// the connection itself.
+async function trySubscribePage(pageId, pageToken) {
+  try {
+    await metaconfig.subscribePage(pageId, pageToken);
+    return true;
+  } catch (err) {
+    console.error('[facebook-oauth] subscribe page failed:', metaconfig.explainGraphError(err).message);
+    return false;
+  }
+}
+
 // ================= Facebook Page Connect (OAuth) =================
 
 // Step 1: tenant clicks "Connect Facebook Page" in their Settings tab,
 // which links here. We send them to Facebook's own login/consent screen.
-router.get('/facebook/start', requireTenantSession, (req, res) => {
-  if (!config.FB_APP_ID) {
-    return res.redirect('/admin?fb_error=' + encodeURIComponent('Facebook connect is not configured yet (missing FB_APP_ID).'));
+router.get('/facebook/start', requireTenantSession, async (req, res) => {
+  const mc = await metaconfig.getMetaConfig();
+  if (!mc.appId || !mc.publicBaseUrl) {
+    return res.redirect('/admin?fb_error=' + encodeURIComponent('Facebook connect is not set up yet — the platform owner needs to finish Meta Setup.'));
   }
-  const redirectUri = `${config.PUBLIC_BASE_URL}/api/connect/facebook/callback`;
+  const redirectUri = `${mc.publicBaseUrl}/api/connect/facebook/callback`;
   const scope = [
     'pages_show_list',
     'pages_messaging',
@@ -29,8 +45,8 @@ router.get('/facebook/start', requireTenantSession, (req, res) => {
     'instagram_manage_messages'
   ].join(',');
   const authUrl =
-    `https://www.facebook.com/v19.0/dialog/oauth` +
-    `?client_id=${encodeURIComponent(config.FB_APP_ID)}` +
+    `https://www.facebook.com/${metaconfig.GRAPH_VERSION}/dialog/oauth` +
+    `?client_id=${encodeURIComponent(mc.appId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=${encodeURIComponent(scope)}` +
     `&state=${encodeURIComponent(String(req.session.tenantId))}`;
@@ -46,17 +62,18 @@ router.get('/facebook/callback', requireTenantSession, async (req, res) => {
   if (!code) return res.redirect('/admin?fb_error=' + encodeURIComponent('No authorization code received.'));
 
   try {
-    const redirectUri = `${config.PUBLIC_BASE_URL}/api/connect/facebook/callback`;
+    const mc = await metaconfig.getMetaConfig();
+    const redirectUri = `${mc.publicBaseUrl}/api/connect/facebook/callback`;
 
     const shortLived = await axios.get(`${FB_GRAPH}/oauth/access_token`, {
-      params: { client_id: config.FB_APP_ID, client_secret: config.FB_APP_SECRET, redirect_uri: redirectUri, code }
+      params: { client_id: mc.appId, client_secret: mc.appSecret, redirect_uri: redirectUri, code }
     });
 
     const longLived = await axios.get(`${FB_GRAPH}/oauth/access_token`, {
       params: {
         grant_type: 'fb_exchange_token',
-        client_id: config.FB_APP_ID,
-        client_secret: config.FB_APP_SECRET,
+        client_id: mc.appId,
+        client_secret: mc.appSecret,
         fb_exchange_token: shortLived.data.access_token
       }
     });
@@ -77,7 +94,8 @@ router.get('/facebook/callback', requireTenantSession, async (req, res) => {
         fb_page_access_token: pages[0].access_token,
         fb_enabled: 'true'
       });
-      return res.redirect('/admin?fb_connected=1');
+      const subscribed = await trySubscribePage(pages[0].id, pages[0].access_token);
+      return res.redirect(subscribed ? '/admin?fb_connected=1' : '/admin?fb_error=' + encodeURIComponent(SUBSCRIBE_FAILED_MSG));
     }
 
     // Multiple Pages — stash them in the session and let the tenant pick.
@@ -103,10 +121,21 @@ router.post('/facebook/select-page', requireTenantSession, async (req, res) => {
     fb_enabled: 'true'
   });
   delete req.session.fbPendingPages;
+  const subscribed = await trySubscribePage(page.id, page.access_token);
+  if (!subscribed) return res.json({ ok: true, warning: SUBSCRIBE_FAILED_MSG });
   res.json({ ok: true });
 });
 
 router.post('/facebook/disconnect', requireTenantSession, async (req, res) => {
+  // Best effort: stop Meta delivering this Page's messages to us.
+  try {
+    const current = await db.getSettings(req.session.tenantId);
+    if (current.fb_page_id && current.fb_page_access_token) {
+      await metaconfig.unsubscribePage(current.fb_page_id, current.fb_page_access_token);
+    }
+  } catch (err) {
+    console.error('[facebook-oauth] unsubscribe failed:', metaconfig.explainGraphError(err).message);
+  }
   await db.updateSettings(req.session.tenantId, {
     fb_page_id: '',
     fb_page_name: '',
@@ -132,12 +161,32 @@ router.post('/whatsapp/embedded-signup/callback', requireTenantSession, async (r
   }
 
   try {
-    if (code && config.FB_APP_ID && config.FB_APP_SECRET) {
-      // Confirms the grant succeeded; the resulting token isn't stored —
-      // sending uses the one platform-wide system user token instead.
-      await axios.get(`${FB_GRAPH}/oauth/access_token`, {
-        params: { client_id: config.FB_APP_ID, client_secret: config.FB_APP_SECRET, code }
+    const mc = await metaconfig.getMetaConfig();
+    let businessToken = null;
+    if (code && mc.appId && mc.appSecret) {
+      // Confirms the grant succeeded. The token isn't stored — sending uses
+      // the one platform-wide system user token — but it's good for the
+      // one-off subscription call below.
+      const exchanged = await axios.get(`${FB_GRAPH}/oauth/access_token`, {
+        params: { client_id: mc.appId, client_secret: mc.appSecret, code }
       });
+      businessToken = exchanged.data && exchanged.data.access_token;
+    }
+
+    // Subscribe this WhatsApp Business Account to our app so its incoming
+    // messages are delivered to /webhook. Non-fatal: the number is saved
+    // either way, but without this the tenant would never get replies.
+    let subscribeWarning = null;
+    const subToken = businessToken || mc.waSystemToken;
+    if (subToken) {
+      try {
+        await metaconfig.subscribeWaba(waba_id, subToken);
+      } catch (err) {
+        console.error('[whatsapp-signup] subscribe WABA failed:', metaconfig.explainGraphError(err).message);
+        subscribeWarning = "Number connected, but we couldn't switch on message delivery for it. Please contact support.";
+      }
+    } else {
+      subscribeWarning = "Number connected, but message delivery isn't switched on yet — the platform owner still needs to add the WhatsApp system token.";
     }
 
     await db.updateSettings(req.session.tenantId, {
@@ -146,7 +195,7 @@ router.post('/whatsapp/embedded-signup/callback', requireTenantSession, async (r
       wa_cloud_display_number: display_phone_number || '',
       whatsapp_enabled: 'true'
     });
-    res.json({ ok: true });
+    res.json({ ok: true, warning: subscribeWarning || undefined });
   } catch (err) {
     console.error('[whatsapp-embedded-signup] failed:', err.response ? JSON.stringify(err.response.data) : err.message);
     res.status(500).json({ error: 'Could not finish connecting WhatsApp. Please try again.' });

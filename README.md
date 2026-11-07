@@ -79,8 +79,12 @@ If an AI call fails for any reason — no key configured anywhere, an invalid ke
 
 Note: `db.getSettings()` always merges in sensible defaults for any setting a tenant's row doesn't have yet — this matters because the list of settings has grown over time, so a tenant created before a given field existed (e.g. `fallback_message`) would otherwise get `undefined` for it instead of the default, which broke the fallback reply itself in an early version of this feature. Fixed now, but worth knowing if you ever add a new per-tenant setting: always add it to `DEFAULT_SETTINGS` in `db.js` rather than assuming existing tenants will have it.
 
-## Dashboard tab
-The first thing a tenant sees when they log in: total AI replies sent, replies sent today, conversation counts split by Facebook/Instagram/WhatsApp, and order counts by status (awaiting payment / paid / cancelled). All computed live from the same `messages`, `conversations`, and `orders` tables — nothing separate to keep in sync.
+## Dashboards (tenant and super admin)
+**Tenant Dashboard:** subscription banner, a "get your bot working" checklist (connect a channel, customise the AI, add products, first message), KPI tiles with change versus the previous period, and charts for AI replies, customer messages, busiest hours, channel split, order value and best sellers, with a 7 / 14 / 30 day switch. Backed by `GET /api/analytics?days=`.
+
+**Super admin Overview** (`/superadmin` → Overview): active customers, estimated monthly recurring revenue, revenue, sign-ups, AI replies, AI cost, connected channels and payments awaiting review, with 7 / 30 / 90 day charts, most active tenants, plan mix and a "needs your attention" list (pending payments, trials/subscriptions ending within 7 days with a one-click +30 days). Backed by `GET /api/superadmin/analytics?days=`.
+
+Days are bucketed in Bangladesh time. Set `REPORT_TZ_OFFSET_MINUTES` in `config.js` (default `360`) to change that.
 
 ## AI credentials, plans, and real $ cost tracking
 This changed from earlier versions: **tenants never set an AI key.** AI credentials (OpenAI or Gemini) live in the super admin panel's **Platform AI** card as the universal default, with an optional per-tenant override (above). Every tenant's replies use whichever one resolves for them automatically and transparently.
@@ -105,9 +109,19 @@ Tenants pick and switch plans themselves from their **Billing** tab — no appro
 - A per-tenant breakdown table, so you can see at a glance which accounts are actually expensive to serve — useful for deciding who needs a higher-priced plan, or whether your plan pricing has enough margin
 - Rates come from `pricing.js` — a $-per-million-token table by provider/model. Providers change prices occasionally; if the numbers here look stale, update that file's rates (this only affects the report, never what you're actually billed by OpenAI/Google).
 
-## Connecting Facebook, Instagram & WhatsApp — one-click for tenants, real setup for you
+## Connecting Facebook, Instagram & WhatsApp — set up entirely from `/superadmin`
 
-**Start in `/superadmin` → Meta Setup.** It's the first thing you see after logging in — a live checklist (green ✓ / red !) showing exactly which of the four `config.js` values below are filled in, plus the exact webhook URL and verify token to paste into your Meta App, each with a one-click Copy button. No secret values are ever sent to that page — only whether each one is set. Work through the steps below in order, refresh that panel as you go, and it'll tell you what's still missing.
+**Everything Meta-related is configured in `/superadmin` → Meta Setup. No `config.js` editing and no redeploy.** It is a six-step guided checklist with a progress bar: (1) public https address, (2) App ID + App Secret, (3) webhook verify token and one-click webhook registration, (4) Facebook Login redirect URI and App Domain (copy buttons), (5) WhatsApp Embedded Signup config ID and system-user token, (6) go-live checks (business verification, permissions, app Live).
+
+- **Save & check with Meta** validates the App ID/Secret against Meta before storing them, so a typo cannot silently break your bots.
+- **Register webhooks with Meta** subscribes Messenger, Instagram and WhatsApp to `{your address}/webhook` using your verify token. **Check with Meta** shows, per product, whether Meta's registered callback matches.
+- Values saved in the panel win. Anything still in `config.js` keeps working as a fallback (shown as "currently from config.js"), so existing deployments are unaffected.
+- Secrets (App Secret, WhatsApp token) are stored in your database as plain text, like the AI keys, and only a masked preview is ever sent back to the browser.
+- **Webhook signatures:** once an App Secret is set, every incoming webhook must carry a valid `X-Hub-Signature-256`, so nobody can fake messages by finding the URL.
+- **Per-tenant subscriptions:** connecting a Page or WhatsApp number now also subscribes it to your app (`subscribed_apps`). Without this Meta does not deliver that tenant's messages. Disconnecting unsubscribes. If this step fails the tenant sees a warning.
+- Graph API version defaults to `v23.0`; override with `FB_GRAPH_VERSION` in `config.js`.
+
+The steps below still describe what has to happen on Meta's side; the panel now holds the values.
 
 Tenants no longer copy-paste Page IDs or tokens. They click **Connect Facebook Page** / **Connect WhatsApp**, authorize through Meta's own popup, and pick their Page or number — Instagram then just needs a toggle, since it rides on the same Page connection. Manual entry still exists as a fallback link on both, in case a tenant already has their own separate Meta App setup, or your OAuth isn't configured yet.
 

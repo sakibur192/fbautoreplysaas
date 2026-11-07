@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Super Admin</title>
+<title>Baybex AI — Super Admin</title>
+<script src="/shared/charts.js"></script>
 <style>
   :root {
     --violet: #6d28d9; --violet-2: #4f46e5; --pink: #ec4899; --cyan: #06b6d4;
@@ -115,6 +116,63 @@
     *, .toast, .modal-backdrop .modal { animation: none !important; transition: none !important; }
   }
 </style>
+
+<style>
+  /* ---- Overview dashboard ---- */
+  .ov-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: -4px 0 14px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .kpi { background: #fff; border: 1px solid var(--card-line); border-radius: 14px; padding: 16px 18px; position: relative; overflow: hidden; box-shadow: 0 2px 14px rgba(84,49,179,0.06); transition: transform .2s ease, box-shadow .2s ease; }
+  .kpi:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -12px rgba(84,49,179,0.3); }
+  .kpi .ico { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: linear-gradient(135deg, rgba(79,70,229,.14), rgba(236,72,153,.14)); margin-bottom: 10px; }
+  .kpi .lbl { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+  .kpi .val { font-size: 27px; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .kpi.alert { border-color: #fcd34d; background: linear-gradient(180deg, #fffbeb, #fff); cursor: pointer; }
+  .kpi.alert .val { color: #b45309; }
+  .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-card { padding: 20px 22px; }
+  .chart-card h4 { margin: 0 0 12px; font-size: 14px; display: flex; justify-content: space-between; align-items: baseline; }
+  .chart-card h4 small { font-weight: 500; color: var(--muted); font-size: 12px; }
+  .attn-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #f1f5f9; font-size: 13px; }
+  .attn-row:first-child { border-top: none; }
+  .attn-row .who { font-weight: 600; }
+  .attn-row .meta { color: var(--muted); font-size: 12px; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
+  .pill.ok { background: #dcfce7; color: #166534; }
+  .pill.todo { background: #fee2e2; color: #991b1b; }
+  .pill.check { background: #fef3c7; color: #92400e; }
+  .pill.manual { background: #ede9fe; color: #5b21b6; }
+
+  /* ---- Meta guided setup ---- */
+  .progress-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+  .progress { flex: 1; height: 9px; background: #efeefa; border-radius: 99px; overflow: hidden; }
+  .progress > div { height: 100%; width: 0; background: var(--grad-brand); border-radius: 99px; transition: width .7s cubic-bezier(.2,.8,.2,1); }
+  .mstep { border: 1px solid var(--card-line); border-radius: 12px; margin-top: 12px; overflow: hidden; background: #fff; }
+  .mstep-head { display: flex; align-items: center; gap: 12px; padding: 13px 16px; cursor: pointer; background: #faf9ff; user-select: none; }
+  .mstep-head .num { width: 26px; height: 26px; border-radius: 50%; background: var(--grad-brand); color: #fff; font-weight: 700; font-size: 12.5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .mstep[data-state="ok"] .num { background: linear-gradient(135deg, #16a34a, #22c55e); }
+  .mstep-head .t { font-weight: 700; font-size: 14px; flex: 1; }
+  .mstep-head .chev { color: var(--muted); transition: transform .2s; font-size: 12px; }
+  .mstep.open .chev { transform: rotate(180deg); }
+  .mstep-body { display: none; padding: 4px 18px 18px; border-top: 1px solid var(--card-line); }
+  .mstep.open .mstep-body { display: block; }
+  .mstep-body p { font-size: 13px; color: #4b5563; margin: 12px 0 0; line-height: 1.55; }
+  .mstep-body ol { font-size: 13px; color: #4b5563; padding-left: 20px; margin: 10px 0 0; line-height: 1.7; }
+  .mstep-body input[type=text], .mstep-body input[type=password] { display: block; width: 100%; padding: 10px; margin: 6px 0 0; border: 1px solid #ddd; border-radius: 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .mstep-body label { margin-top: 14px; }
+  .mstep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  .src { font-weight: 600; font-size: 11px; color: #92400e; background: #fef3c7; padding: 1px 7px; border-radius: 99px; margin-left: 6px; display: none; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .check-list { margin-top: 12px; }
+  .check-item { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; font-size: 13px; }
+  .check-item input { margin-top: 3px; }
+  .cres { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #f1f5f9; font-size: 13px; }
+  .cres:first-child { border-top: none; }
+  .cres .check-dot { margin-top: 0; }
+  .cres code { font-size: 11.5px; word-break: break-all; }
+</style>
 </head>
 <body>
 
@@ -133,6 +191,7 @@
   <aside class="sidebar">
     <div class="sidebar-brand"><span class="dot"></span> Baybex<span style="opacity:0.7;">AI</span> Admin</div>
     <div class="jumpnav" id="jumpnav">
+      <a href="#sec-overview" data-sec="sec-overview"><span class="ico">📈</span>Overview</a>
       <a href="#sec-meta-setup" data-sec="sec-meta-setup"><span class="ico">🔌</span>Meta Setup</a>
       <a href="#sec-platform-ai" data-sec="sec-platform-ai"><span class="ico">🤖</span>Platform AI</a>
       <a href="#sec-ai-cost" data-sec="sec-ai-cost"><span class="ico">💰</span>AI Cost</a>
@@ -150,12 +209,122 @@
     <strong>Super Admin — all tenants</strong>
   </header>
   <main>
-    <h2 id="sec-meta-setup">🔌 Connect your Meta App</h2>
+    <h2 id="sec-overview">📈 Overview</h2>
+    <div class="ov-head">
+      <span class="muted" id="ov-sub">How your platform is doing</span>
+      <div class="bx-range" id="range-switch">
+        <button data-d="7" onclick="setOverviewRange(7)">7 days</button>
+        <button data-d="30" class="on" onclick="setOverviewRange(30)">30 days</button>
+        <button data-d="90" onclick="setOverviewRange(90)">90 days</button>
+      </div>
+    </div>
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div class="chart-grid">
+      <div class="card chart-card"><h4>Revenue <small>approved payments · ৳ per day</small></h4><div id="ch-revenue"></div></div>
+      <div class="card chart-card"><h4>AI replies <small>per day, all tenants</small></h4><div id="ch-replies"></div></div>
+      <div class="card chart-card"><h4>New sign-ups <small>per day</small></h4><div id="ch-signups"></div></div>
+      <div class="card chart-card"><h4>Customers by status</h4><div id="ch-states"></div></div>
+      <div class="card chart-card"><h4>Most active tenants <small>AI replies in range</small></h4><div id="ch-top"></div></div>
+      <div class="card chart-card"><h4>Customers by plan</h4><div id="ch-plans"></div></div>
+    </div>
+    <div class="card chart-card" style="margin-top:14px;">
+      <h4>Needs your attention</h4>
+      <div id="attention"></div>
+    </div>
+
+    <h2 id="sec-meta-setup">🔌 Connect Meta — Facebook · Instagram · WhatsApp</h2>
     <div class="card">
-      <p style="color:#6b7280; font-size:13px; margin-top:0;">One Meta App serves every tenant's Facebook Page, Instagram account, and WhatsApp number — you set it up once here. Tenants never see any of this; they just click "Connect" in their own Settings tab.</p>
-      <ul class="setup-steps" id="meta-setup-list"></ul>
-      <p style="color:#9ca3af; font-size:12px; margin-top:14px;">Status refreshes from your server's <code>config.js</code> — nothing here is stored in the database, and no secret values are ever sent to this page.</p>
-      <div style="margin-top:14px;"><a href="https://developers.facebook.com/apps" target="_blank" rel="noopener" style="color:var(--violet-2); font-weight:600; text-decoration:none; font-size:13px;">Open Meta for Developers →</a></div>
+      <p class="muted" style="margin-top:0;">One Meta App serves every tenant's Facebook Page, Instagram account and WhatsApp number. Set it up once, here — everything saves to your database, no config file and no redeploy. Tenants never see any of this; they just press "Connect" in their own Settings.</p>
+      <div class="progress-row"><div class="progress"><div id="meta-progress-bar"></div></div><strong id="meta-progress-text" style="font-size:13px; white-space:nowrap;"></strong></div>
+
+      <div class="mstep open" id="ms-url" data-state="todo">
+        <div class="mstep-head" onclick="toggleStep('ms-url')"><span class="num">1</span><span class="t">Your public address</span><span class="pill todo">To do</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <p>The secure (<code>https://</code>) address people use to reach this website. Meta only sends messages to https addresses, and every link below is built from this.</p>
+          <label>Public address <span class="src" id="src-base"></span></label>
+          <input id="meta-base-url" type="text" placeholder="https://baybexai.digital" autocomplete="off" />
+          <div class="mstep-actions"><button onclick="saveMeta('url')">Save address</button></div>
+        </div>
+      </div>
+
+      <div class="mstep" id="ms-app" data-state="todo">
+        <div class="mstep-head" onclick="toggleStep('ms-app')"><span class="num">2</span><span class="t">Create your Meta App &amp; paste its keys</span><span class="pill todo">To do</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <ol>
+            <li>Open <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">Meta for Developers</a> → <strong>Create App</strong> → choose <strong>Business</strong> type, name it "Baybex AI".</li>
+            <li>In your new app go to <strong>App settings → Basic</strong>. Copy the <strong>App ID</strong>, and click <strong>Show</strong> next to <strong>App Secret</strong>.</li>
+            <li>Paste both below. When you save, we ask Meta whether the pair is real — a wrong one is refused so it can't break anything.</li>
+          </ol>
+          <label>App ID <span class="src" id="src-appid"></span></label>
+          <input id="meta-app-id" type="text" placeholder="123456789012345" autocomplete="off" />
+          <label>App Secret <span class="src" id="src-secret"></span> <span id="meta-secret-state" class="hint" style="display:inline; margin-left:6px;"></span></label>
+          <input id="meta-app-secret" type="password" placeholder="Paste the secret here (never shown again after saving)" autocomplete="new-password" />
+          <div class="hint">The secret is also used to check that every incoming message really comes from Meta.</div>
+          <div class="mstep-actions">
+            <button onclick="saveMeta('app')">Save &amp; check with Meta</button>
+            <button class="secondary" id="meta-clear-secret" onclick="clearMetaSecret()" style="display:none;">Remove saved secret</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mstep" id="ms-hook" data-state="todo">
+        <div class="mstep-head" onclick="toggleStep('ms-hook')"><span class="num">3</span><span class="t">Connect the webhook <span style="font-weight:500; color:var(--muted);">(how Meta delivers messages to you)</span></span><span class="pill todo">To do</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <p>The webhook is the address Meta calls whenever a customer messages any connected Page, Instagram account or WhatsApp number. Pick a verify token (a password only you and Meta know), save, then let us register it with Meta in one click.</p>
+          <label>Verify token <span class="src" id="src-token"></span></label>
+          <input id="meta-verify-token" type="text" placeholder="at least 8 characters, no spaces" autocomplete="off" />
+          <div class="mstep-actions"><button class="secondary" onclick="generateVerifyToken()">Generate one for me</button><button onclick="saveMeta('token')">Save token</button></div>
+          <label>Callback URL (filled in automatically)</label>
+          <div class="copy-row"><code id="meta-webhook-url">—</code><button class="secondary" onclick="copyText(document.getElementById('meta-webhook-url').textContent, this)">Copy</button></div>
+          <div class="mstep-actions" style="margin-top:16px;">
+            <button onclick="registerWebhooks()" id="btn-register">Register webhooks with Meta</button>
+            <button class="secondary" onclick="checkWithMeta()" id="btn-check">Check with Meta</button>
+          </div>
+          <div id="meta-check-result" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <div class="mstep" id="ms-login" data-state="manual">
+        <div class="mstep-head" onclick="toggleStep('ms-login')"><span class="num">4</span><span class="t">Allow the "Connect Facebook" button <span style="font-weight:500; color:var(--muted);">(2 minutes in Meta)</span></span><span class="pill manual">Your turn</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <ol>
+            <li>In your Meta app: <strong>Add product → Facebook Login for Business</strong> (or Facebook Login) → <strong>Settings</strong>.</li>
+            <li>Paste this into <strong>Valid OAuth Redirect URIs</strong> and save:</li>
+          </ol>
+          <div class="copy-row"><code id="meta-redirect-uri">—</code><button class="secondary" onclick="copyText(document.getElementById('meta-redirect-uri').textContent, this)">Copy</button></div>
+          <ol start="3"><li>Then <strong>App settings → Basic → App Domains</strong>, paste this and save:</li></ol>
+          <div class="copy-row"><code id="meta-app-domain">—</code><button class="secondary" onclick="copyText(document.getElementById('meta-app-domain').textContent, this)">Copy</button></div>
+          <div class="check-list"><label class="check-item"><input type="checkbox" id="mc-redirect" onchange="saveManual({ redirect_uri: this.checked, domains: this.checked })" /> I've done both of these in Meta</label></div>
+        </div>
+      </div>
+
+      <div class="mstep" id="ms-wa" data-state="todo">
+        <div class="mstep-head" onclick="toggleStep('ms-wa')"><span class="num">5</span><span class="t">WhatsApp <span style="font-weight:500; color:var(--muted);">(skip if you only sell Facebook/Instagram)</span></span><span class="pill todo">To do</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <ol>
+            <li>In your app add the <strong>WhatsApp</strong> product → <strong>Configuration → Embedded Signup</strong> → create a configuration ("Allow people to share their own WhatsApp Business number"). Copy its <strong>Configuration ID</strong>.</li>
+            <li>In <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener">Business Settings → System users</a> create a system user, give it your app with <code>whatsapp_business_messaging</code> + <code>whatsapp_business_management</code>, then <strong>Generate token</strong> (never expires). Paste it below — one token sends for every tenant's number.</li>
+          </ol>
+          <label>Embedded Signup Configuration ID <span class="src" id="src-wacfg"></span></label>
+          <input id="meta-wa-config" type="text" placeholder="1234567890123456" autocomplete="off" />
+          <label>System user token <span id="meta-watoken-state" class="hint" style="display:inline; margin-left:6px;"></span></label>
+          <input id="meta-wa-token" type="password" placeholder="Paste token (never shown again after saving)" autocomplete="new-password" />
+          <div class="mstep-actions"><button onclick="saveMeta('wa')">Save WhatsApp settings</button></div>
+        </div>
+      </div>
+
+      <div class="mstep" id="ms-live" data-state="manual">
+        <div class="mstep-head" onclick="toggleStep('ms-live')"><span class="num">6</span><span class="t">Go live <span style="font-weight:500; color:var(--muted);">(so real customers' Pages can connect)</span></span><span class="pill manual">Your turn</span><span class="chev">▼</span></div>
+        <div class="mstep-body">
+          <p>Until these are done, only people you've added as testers in your Meta app can connect and message. Tick each one when finished:</p>
+          <div class="check-list">
+            <label class="check-item"><input type="checkbox" id="mc-business" onchange="saveManual({ business_verified: this.checked })" /> <span><strong>Business verification approved</strong> — Meta Business Settings → Security Center.</span></label>
+            <label class="check-item"><input type="checkbox" id="mc-perms" onchange="saveManual({ permissions: this.checked })" /> <span><strong>Permissions approved</strong> — App Review → request <code>pages_messaging</code>, <code>pages_show_list</code>, <code>pages_manage_metadata</code>, <code>instagram_basic</code>, <code>instagram_manage_messages</code>, <code>whatsapp_business_messaging</code>.</span></label>
+            <label class="check-item"><input type="checkbox" id="mc-live" onchange="saveManual({ app_live: this.checked })" /> <span><strong>App switched to Live</strong> — the toggle at the top of your app dashboard.</span></label>
+          </div>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:14px;">Secrets are stored in your database and are never sent back to this page — only a masked preview. Values already in <code>config.js</code> keep working until you save one here.</p>
     </div>
 
     <h2 id="sec-platform-ai">Platform AI</h2>
@@ -490,7 +659,8 @@ function showLogin() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  loadMetaStatus();
+  loadOverview();
+  loadMeta();
   loadPlatformSettings();
   loadCosts();
   loadPlans();
@@ -516,50 +686,238 @@ async function copyText(text, btn) {
   }
 }
 
-async function loadMetaStatus() {
-  const s = await api('/api/superadmin/meta-status');
-  const list = document.getElementById('meta-setup-list');
-  const items = [
-    {
-      ok: s.public_base_url_set,
-      title: 'Public HTTPS domain set',
-      detail: s.public_base_url_set
-        ? 'PUBLIC_BASE_URL is set to <strong>' + escapeHtml(s.public_base_url) + '</strong>.'
-        : 'Set <code>PUBLIC_BASE_URL</code> in <code>config.js</code> to your real HTTPS domain — everything below depends on this.'
-    },
-    {
-      ok: s.fb_app_configured,
-      title: 'Facebook App ID & Secret',
-      detail: s.fb_app_configured
-        ? 'Configured — tenants can use one-click "Connect Facebook Page" (covers Instagram DMs too).'
-        : 'From developers.facebook.com → your app → Settings → Basic, copy the App ID + App Secret into <code>FB_APP_ID</code> / <code>FB_APP_SECRET</code> in <code>config.js</code>.'
-    },
-    {
-      ok: s.fb_webhook_token_set,
-      title: 'Webhook verify token',
-      detail: s.fb_webhook_token_set
-        ? 'A custom verify token is set — paste the URL and token below into your Meta App\'s Webhooks config.'
-        : 'Still on the placeholder value — set <code>FB_WEBHOOK_VERIFY_TOKEN</code> in <code>config.js</code> to any string you choose, then reuse it below.'
-    },
-    {
-      ok: s.wa_embedded_signup_configured,
-      title: 'WhatsApp Embedded Signup',
-      detail: s.wa_embedded_signup_configured
-        ? 'Configuration ID is set — tenants can one-click "Connect WhatsApp".'
-        : 'Optional but recommended: create a Configuration under your Meta App → WhatsApp → Embedded Signup, then set <code>WA_EMBEDDED_SIGNUP_CONFIG_ID</code> in <code>config.js</code>.'
-    }
-  ];
-  list.innerHTML = items.map(it =>
-    '<li><span class="check-dot ' + (it.ok ? 'yes' : 'no') + '">' + (it.ok ? '✓' : '!') + '</span>' +
-    '<div><strong>' + it.title + '</strong><div style="color:#6b7280; font-size:13px; margin-top:2px;">' + it.detail + '</div></div></li>'
-  ).join('');
+// ================= Overview dashboard =================
+let overviewDays = 30;
 
-  if (s.public_base_url_set) {
-    list.innerHTML += '<li><span class="check-dot yes">→</span><div style="flex:1;"><strong>Paste into Meta App → Webhooks</strong>' +
-      '<div class="copy-row"><code id="webhook-url-code">' + escapeHtml(s.webhook_url) + '</code><button class="secondary" onclick="copyText(\'' + s.webhook_url.replace(/'/g, "\\'") + '\', this)">Copy URL</button></div>' +
-      (s.fb_webhook_token_set ? '<div class="copy-row"><code id="webhook-token-code">' + escapeHtml(s.fb_webhook_verify_token) + '</code><button class="secondary" onclick="copyText(\'' + s.fb_webhook_verify_token.replace(/'/g, "\\'") + '\', this)">Copy token</button></div>' : '') +
-      '<div style="color:#9ca3af; font-size:12px; margin-top:6px;">Subscribe to <code>messages</code> on the Page, Instagram, and WhatsApp Business Account webhook fields.</div></div></li>';
+function animateTo(el, target, fmt) {
+  target = Number(target) || 0;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = fmt(target); return; }
+  const duration = 700, start = performance.now();
+  function tick(now) {
+    const p = Math.min(1, (now - start) / duration), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(target * e);
+    if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target);
   }
+  requestAnimationFrame(tick);
+}
+
+function setOverviewRange(d) {
+  overviewDays = d;
+  document.querySelectorAll('#range-switch button').forEach(b => b.classList.toggle('on', parseInt(b.dataset.d, 10) === d));
+  loadOverview();
+}
+
+async function loadOverview() {
+  let a;
+  try { a = await apiStrict('/api/superadmin/analytics?days=' + overviewDays); }
+  catch (err) { toast(err.message, 'error'); return; }
+  const k = a.kpis, t = a.totals, p = a.previous, st = k.states;
+  const activeCustomers = st.paid + st.trial;
+  const costPerReply = t.replies ? t.ai_cost_usd / t.replies : 0;
+  document.getElementById('ov-sub').textContent = 'Last ' + overviewDays + ' days, compared with the ' + overviewDays + ' before';
+
+  const tiles = [
+    { ico: '👥', lbl: 'Active customers', raw: activeCustomers, fmt: BX.fmtNum, sub: st.paid + ' paying · ' + st.trial + ' on trial' },
+    { ico: '🔁', lbl: 'Monthly recurring (est.)', raw: k.mrr_estimate, fmt: BX.fmtMoney, sub: 'from paying customers\' plans' },
+    { ico: '🧾', lbl: 'Revenue', raw: t.revenue, fmt: BX.fmtMoney, d: BX.deltaHtml(t.revenue, p.revenue), sub: BX.fmtMoney(k.revenue_all_time) + ' all time' },
+    { ico: '🚀', lbl: 'New sign-ups', raw: t.signups, fmt: BX.fmtNum, d: BX.deltaHtml(t.signups, p.signups), sub: k.tenants_total + ' customers in total' },
+    { ico: '💬', lbl: 'AI replies', raw: t.replies, fmt: BX.fmtNum, d: BX.deltaHtml(t.replies, p.replies), sub: BX.fmtNum(k.replies_today) + ' today' },
+    { ico: '🧮', lbl: 'AI cost', raw: t.ai_cost_usd, fmt: BX.fmtUsd, d: BX.deltaHtml(t.ai_cost_usd, p.ai_cost_usd, true), sub: costPerReply ? BX.fmtUsd(costPerReply) + ' per reply' : 'no usage yet' },
+    { ico: '🔗', lbl: 'Channels connected', raw: k.fb_connected + k.wa_connected, fmt: BX.fmtNum, sub: k.fb_connected + ' Facebook/Instagram · ' + k.wa_connected + ' WhatsApp' },
+    { ico: '⏳', lbl: 'Payments to review', raw: k.pending_payments, fmt: BX.fmtNum, sub: k.pending_payments ? BX.fmtMoney(k.pending_amount) + ' waiting — tap to review' : 'all caught up ✓', alert: k.pending_payments > 0 }
+  ];
+  const grid = document.getElementById('kpi-grid');
+  grid.innerHTML = tiles.map((x, i) =>
+    '<div class="kpi' + (x.alert ? ' alert" onclick="location.hash=\'#sec-payments\'' : '') + '"><div class="ico">' + x.ico + '</div><div class="lbl">' + x.lbl + '</div>' +
+    '<div class="val" id="kpi-v-' + i + '">' + x.fmt(0) + '</div>' + (x.d ? '<div style="margin-top:2px;">' + x.d + '<span class="muted" style="font-size:11px; margin-left:4px;">vs before</span></div>' : '') +
+    '<div class="sub">' + x.sub + '</div></div>'
+  ).join('');
+  tiles.forEach((x, i) => animateTo(document.getElementById('kpi-v-' + i), x.raw, x.fmt));
+
+  BX.bars(document.getElementById('ch-revenue'), a.days, a.series.revenue, { color: '#16a34a', tipFmt: BX.fmtMoney, axisFmt: v => v >= 1000 ? Math.round(v / 100) / 10 + 'k' : String(Math.round(v)), empty: 'No approved payments in this period yet' });
+  BX.area(document.getElementById('ch-replies'), a.days, a.series.replies, { color: '#7c3aed', unit: 'replies', empty: 'No AI replies in this period yet' });
+  BX.bars(document.getElementById('ch-signups'), a.days, a.series.signups, { color: '#ec4899', unit: 'sign-ups', empty: 'No new sign-ups in this period' });
+  BX.donut(document.getElementById('ch-states'), [
+    { label: 'Paying', value: st.paid, color: '#16a34a' }, { label: 'On trial', value: st.trial, color: '#06b6d4' },
+    { label: 'Expired', value: st.expired, color: '#f59e0b' }, { label: 'Suspended', value: st.suspended, color: '#94a3b8' }
+  ], { center: String(k.tenants_total), centerLabel: 'customers', empty: 'No customers yet' });
+  BX.hbars(document.getElementById('ch-top'), a.top_tenants.map(x => ({ label: x.business_name, value: x.replies, text: BX.fmtNum(x.replies) + (x.replies === 1 ? ' reply' : ' replies') })), { empty: 'No AI activity in this period' });
+  BX.hbars(document.getElementById('ch-plans'), a.plan_mix.map(x => ({ label: x.name, value: x.count, text: x.count + (x.count === 1 ? ' customer' : ' customers') })), { empty: 'No customers yet' });
+
+  const rows = [];
+  if (k.pending_payments) rows.push('<div class="attn-row"><div><div class="who">' + k.pending_payments + ' payment' + (k.pending_payments === 1 ? '' : 's') + ' waiting for approval</div><div class="meta">' + BX.fmtMoney(k.pending_amount) + ' in total — tenants stay locked out until you approve</div></div><a href="#sec-payments"><button>Review</button></a></div>');
+  a.expiring_soon.forEach(e => rows.push('<div class="attn-row"><div><div class="who">' + escapeHtml(e.business_name) + '</div><div class="meta">' + (e.state === 'trial' ? 'Trial' : 'Subscription') + ' ends ' + (e.days_left === 0 ? 'today' : 'in ' + e.days_left + ' day' + (e.days_left === 1 ? '' : 's')) + '</div></div><button class="secondary" onclick="quickExtend(' + e.id + ', 30)">+30 days</button></div>'));
+  document.getElementById('attention').innerHTML = rows.length ? rows.join('') : '<div class="bx-empty" style="padding:14px 0;">Nothing needs you right now ✓</div>';
+}
+
+async function quickExtend(id, days) {
+  try {
+    await apiStrict('/api/superadmin/tenants/' + id + '/extend', { method: 'POST', body: JSON.stringify({ days }) });
+    toast('Extended by ' + days + ' days');
+    loadOverview(); loadTenants();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ================= Meta guided setup =================
+let metaState = null;
+let metaCheck = null; // last result of "Check with Meta"
+
+function toggleStep(id) { document.getElementById(id).classList.toggle('open'); }
+
+function setSrc(id, source) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (source === 'config.js') { el.textContent = 'currently from config.js'; el.style.display = 'inline'; }
+  else el.style.display = 'none';
+}
+
+function setStep(id, state, label) {
+  const el = document.getElementById(id);
+  el.dataset.state = state;
+  const pill = el.querySelector('.pill');
+  pill.className = 'pill ' + (state === 'ok' ? 'ok' : state === 'check' ? 'check' : state === 'manual' ? 'manual' : 'todo');
+  pill.textContent = label;
+  el.querySelector('.num').textContent = state === 'ok' ? '✓' : el.querySelector('.num').dataset.n || el.querySelector('.num').textContent;
+}
+
+async function loadMeta() {
+  try {
+    metaState = await apiStrict('/api/superadmin/meta-settings');
+  } catch (err) { toast(err.message, 'error'); return; }
+  renderMeta(true);
+}
+
+function renderMeta(fillInputs) {
+  const s = metaState;
+  if (!s) return;
+  document.querySelectorAll('#sec-meta-setup ~ .card .mstep .num').forEach(n => { if (!n.dataset.n) n.dataset.n = n.textContent; });
+  if (fillInputs) {
+    document.getElementById('meta-base-url').value = s.values.public_base_url || '';
+    document.getElementById('meta-app-id').value = s.values.app_id || '';
+    document.getElementById('meta-verify-token').value = s.values.verify_token || '';
+    document.getElementById('meta-wa-config').value = s.values.wa_config_id || '';
+    document.getElementById('meta-app-secret').value = '';
+    document.getElementById('meta-wa-token').value = '';
+  }
+  document.getElementById('meta-secret-state').textContent = s.app_secret_set ? '✓ saved (' + s.app_secret_masked + ') — leave blank to keep' : 'not saved yet';
+  document.getElementById('meta-watoken-state').textContent = s.wa_system_token_set ? '✓ saved (' + s.wa_system_token_masked + ') — leave blank to keep' : 'not saved yet';
+  document.getElementById('meta-clear-secret').style.display = s.app_secret_set && s.sources.app_secret === 'panel' ? 'inline-block' : 'none';
+  document.getElementById('meta-webhook-url').textContent = s.derived.webhook_url || 'Set your public address first';
+  document.getElementById('meta-redirect-uri').textContent = s.derived.oauth_redirect_uri || 'Set your public address first';
+  document.getElementById('meta-app-domain').textContent = s.derived.app_domain || 'Set your public address first';
+  setSrc('src-base', s.sources.public_base_url); setSrc('src-appid', s.sources.app_id); setSrc('src-secret', s.sources.app_secret);
+  setSrc('src-token', s.sources.verify_token); setSrc('src-wacfg', s.sources.wa_config_id);
+  document.getElementById('mc-redirect').checked = !!s.manual.redirect_uri;
+  document.getElementById('mc-business').checked = !!s.manual.business_verified;
+  document.getElementById('mc-perms').checked = !!s.manual.permissions;
+  document.getElementById('mc-live').checked = !!s.manual.app_live;
+
+  const done = {};
+  done.url = s.https_ok;
+  done.app = !!(s.values.app_id && s.app_secret_set);
+  const tokenSet = !!s.values.verify_token;
+  const hooksOk = metaCheck && metaCheck.subscriptions && metaCheck.subscriptions.length && metaCheck.subscriptions.every(x => x.matches);
+  done.hook = tokenSet && !!hooksOk;
+  done.login = !!(s.manual.redirect_uri);
+  done.wa = !!(s.values.wa_config_id && s.wa_system_token_set);
+  done.live = !!(s.manual.business_verified && s.manual.permissions && s.manual.app_live);
+
+  setStep('ms-url', done.url ? 'ok' : 'todo', done.url ? 'Done' : (s.values.public_base_url ? 'Needs https' : 'To do'));
+  setStep('ms-app', done.app ? 'ok' : 'todo', done.app ? 'Done' : 'To do');
+  setStep('ms-hook', done.hook ? 'ok' : (tokenSet && done.app && done.url ? 'check' : 'todo'), done.hook ? 'Connected' : (tokenSet && done.app && done.url ? 'Register / check' : 'To do'));
+  setStep('ms-login', done.login ? 'ok' : 'manual', done.login ? 'Done' : 'Your turn');
+  setStep('ms-wa', done.wa ? 'ok' : 'todo', done.wa ? 'Done' : 'To do');
+  setStep('ms-live', done.live ? 'ok' : 'manual', done.live ? 'Live' : 'Your turn');
+
+  const total = 6, n = Object.values(done).filter(Boolean).length;
+  document.getElementById('meta-progress-bar').style.width = Math.round((n / total) * 100) + '%';
+  document.getElementById('meta-progress-text').textContent = n + ' of ' + total + ' steps done';
+}
+
+async function postMeta(body, okMsg) {
+  try {
+    const res = await apiStrict('/api/superadmin/meta-settings', { method: 'POST', body: JSON.stringify(body) });
+    metaState = res.settings;
+    renderMeta(true);
+    if (res.warning) toast(res.warning, 'error'); else if (okMsg) toast(okMsg);
+    return true;
+  } catch (err) { toast(err.message, 'error'); return false; }
+}
+
+async function saveMeta(section) {
+  const v = id => document.getElementById(id).value.trim();
+  if (section === 'url') return postMeta({ public_base_url: v('meta-base-url') }, 'Public address saved');
+  if (section === 'app') {
+    const body = { app_id: v('meta-app-id') };
+    if (v('meta-app-secret')) body.app_secret = v('meta-app-secret');
+    const ok = await postMeta(body, 'Saved — Meta accepted the App ID and Secret');
+    if (ok) checkWithMeta(true);
+    return;
+  }
+  if (section === 'token') return postMeta({ verify_token: v('meta-verify-token') }, 'Verify token saved');
+  if (section === 'wa') {
+    const body = { wa_config_id: v('meta-wa-config') };
+    if (v('meta-wa-token')) body.wa_system_token = v('meta-wa-token');
+    return postMeta(body, 'WhatsApp settings saved');
+  }
+}
+
+async function clearMetaSecret() {
+  if (!confirm('Remove the saved App Secret? Incoming messages will no longer be signature-checked, and "Connect Facebook" will stop working until you add it again.')) return;
+  postMeta({ clear_app_secret: true }, 'Secret removed');
+}
+
+async function saveManual(obj) {
+  try {
+    const res = await apiStrict('/api/superadmin/meta-settings', { method: 'POST', body: JSON.stringify({ manual: obj }) });
+    metaState = res.settings;
+    renderMeta(false);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function generateVerifyToken() {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  document.getElementById('meta-verify-token').value = 'baybex-' + Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+  toast('Generated — press "Save token" to keep it');
+}
+
+function renderCheck(r) {
+  const box = document.getElementById('meta-check-result');
+  if (!r.ok) { box.innerHTML = '<div class="cres"><span class="check-dot no">!</span><div>' + escapeHtml(r.error || 'Check failed') + '</div></div>'; return; }
+  let html = '<div class="cres"><span class="check-dot yes">✓</span><div><strong>Meta accepts your App ID &amp; Secret</strong>' + (r.app && r.app.name ? ' — app "' + escapeHtml(r.app.name) + '"' : '') + '</div></div>';
+  if (r.subscriptions_error) html += '<div class="cres"><span class="check-dot no">!</span><div>Could not read webhook registrations: ' + escapeHtml(r.subscriptions_error) + '</div></div>';
+  (r.subscriptions || []).forEach(x => {
+    const good = x.matches;
+    const detail = good ? 'registered and pointing here' : x.registered ? 'registered, but points to <code>' + escapeHtml(x.callback_url || '?') + '</code> — press "Register webhooks" to fix' : 'not registered yet — press "Register webhooks"';
+    html += '<div class="cres"><span class="check-dot ' + (good ? 'yes' : 'no') + '">' + (good ? '✓' : '!') + '</span><div><strong>' + escapeHtml(x.label) + '</strong> — ' + detail + '</div></div>';
+  });
+  box.innerHTML = html;
+}
+
+async function checkWithMeta(quiet) {
+  const btn = document.getElementById('btn-check');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try {
+    metaCheck = await apiStrict('/api/superadmin/meta-verify', { method: 'POST' });
+    renderCheck(metaCheck);
+    renderMeta(false);
+    if (!quiet && metaCheck.ok) toast('Checked with Meta');
+  } catch (err) { toast(err.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Check with Meta';
+}
+
+async function registerWebhooks() {
+  const btn = document.getElementById('btn-register');
+  btn.disabled = true; btn.textContent = 'Registering…';
+  try {
+    const r = await apiStrict('/api/superadmin/meta-register-webhooks', { method: 'POST' });
+    const failed = r.results.filter(x => !x.ok);
+    if (failed.length) toast(failed.map(f => f.label + ': ' + f.error).join(' · '), 'error');
+    else toast('Webhooks registered with Meta');
+  } catch (err) { toast(err.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Register webhooks with Meta';
+  await checkWithMeta(true);
 }
 
 // Highlights the current section in the sidebar jump-nav as you scroll.

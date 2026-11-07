@@ -1,4 +1,5 @@
 const axios = require('axios');
+const metaconfig = require('./metaconfig');
 
 /**
  * Downloads an image from a plain public URL (e.g. a Facebook attachment
@@ -17,7 +18,7 @@ async function fetchPublicImageAsBase64(url) {
  * bytes from that URL — both calls need the tenant's own access token.
  */
 async function fetchWhatsappCloudMedia(mediaId, accessToken) {
-  const metaRes = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+  const metaRes = await axios.get(`${metaconfig.GRAPH}/${mediaId}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   const { url, mime_type } = metaRes.data;

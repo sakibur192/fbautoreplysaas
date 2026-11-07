@@ -12,8 +12,10 @@ const config = require('./config');
 const db = require('./db');
 const metaWebhook = require('./meta-webhook');
 const metaOauth = require('./meta-oauth');
+const metaconfig = require('./metaconfig');
 const ai = require('./ai');
 const websiteScan = require('./website-scan');
+const analytics = require('./analytics');
 
 const app = express();
 const server = http.createServer(app);
@@ -29,7 +31,14 @@ app.set('trust proxy', 1);
 // (clickjacking protection, MIME sniffing, etc.) still apply.
 app.use(helmet({ contentSecurityPolicy: false }));
 
-app.use(express.json({ limit: '2mb' }));
+// The webhook route needs the exact bytes Meta sent, because the signature
+// is computed over them — so keep a copy of the raw body for /webhook only.
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, res, buf) => {
+    if (req.originalUrl && req.originalUrl.split('?')[0] === '/webhook') req.rawBody = buf;
+  }
+}));
 
 // ---- Image uploads (logo, favicon, hero slides, blog covers, avatars) ----
 // Super-admin-only (enforced per-route below). Stored on local disk under
@@ -141,10 +150,12 @@ app.post('/api/logout', (req, res) => {
 // Public, non-secret identifiers the frontend needs for Meta's JS SDK
 // (Facebook App ID and an Embedded Signup Configuration ID are always
 // meant to be used client-side — this is not the app secret).
-app.get('/api/public-config', (req, res) => {
+app.get('/api/public-config', async (req, res) => {
+  const mc = await metaconfig.getMetaConfig();
   res.json({
-    fb_app_id: config.FB_APP_ID || null,
-    wa_embedded_signup_config_id: config.WA_EMBEDDED_SIGNUP_CONFIG_ID || null
+    fb_app_id: mc.appId || null,
+    wa_embedded_signup_config_id: mc.waConfigId || null,
+    graph_version: metaconfig.GRAPH_VERSION
   });
 });
 
@@ -272,6 +283,17 @@ app.get('/api/dashboard', requireTenant, async (req, res) => {
   const stats = await db.getDashboardStats(req.session.tenantId);
   const usage = await db.getReplyUsage(req.session.tenantId);
   res.json({ ...stats, plan: usage.plan, usage: { used: usage.used, limit: usage.limit } });
+});
+
+// Chart data for the tenant dashboard: daily series, period totals with the
+// previous period for comparison, busiest hours, best sellers, setup progress.
+app.get('/api/analytics', requireTenant, async (req, res) => {
+  try {
+    res.json(await analytics.getTenantAnalytics(req.session.tenantId, req.query.days));
+  } catch (err) {
+    console.error('[analytics] tenant failed:', err);
+    res.status(500).json({ error: 'Could not load your analytics.' });
+  }
 });
 
 // ================= Settings =================
@@ -512,28 +534,195 @@ app.post('/api/superadmin/test-ai', requireSuperAdmin, async (req, res) => {
 
 // Platform-wide real $ cost dashboard — computed from ai_usage, which is
 // logged from the provider's own token counts on every reply.
+app.get('/api/superadmin/analytics', requireSuperAdmin, async (req, res) => {
+  try {
+    res.json(await analytics.getPlatformAnalytics(req.query.days));
+  } catch (err) {
+    console.error('[analytics] platform failed:', err);
+    res.status(500).json({ error: 'Could not load platform analytics.' });
+  }
+});
+
 app.get('/api/superadmin/costs', requireSuperAdmin, async (req, res) => {
   res.json(await db.getPlatformCostSummary());
 });
 
-// One-glance readiness check for the Meta App setup that serves every
-// tenant's Facebook/Instagram/WhatsApp connection. These are all deploy-time
-// values from config.js (not the database), so this never returns the
-// actual secret values — only whether each one has been filled in, plus
-// the exact webhook URL/token to paste into the Meta App dashboard (safe
-// to show since you set FB_WEBHOOK_VERIFY_TOKEN yourself, it's not a secret
-// Meta generates for you).
-app.get('/api/superadmin/meta-status', requireSuperAdmin, (req, res) => {
-  const publicBaseUrlSet = !!config.PUBLIC_BASE_URL && config.PUBLIC_BASE_URL !== 'https://your-domain.example.com';
-  res.json({
-    public_base_url_set: publicBaseUrlSet,
-    public_base_url: publicBaseUrlSet ? config.PUBLIC_BASE_URL : '',
-    fb_app_configured: !!(config.FB_APP_ID && config.FB_APP_SECRET),
-    fb_webhook_token_set: !!config.FB_WEBHOOK_VERIFY_TOKEN && config.FB_WEBHOOK_VERIFY_TOKEN !== 'change-this-verify-token',
-    fb_webhook_verify_token: config.FB_WEBHOOK_VERIFY_TOKEN || '',
-    wa_embedded_signup_configured: !!config.WA_EMBEDDED_SIGNUP_CONFIG_ID,
-    webhook_url: publicBaseUrlSet ? config.PUBLIC_BASE_URL.replace(/\/$/, '') + '/webhook' : ''
+// ---- Meta App setup (everything the tenants' Facebook/Instagram/WhatsApp
+// connections depend on). Values live in platform_settings; config.js is
+// only a fallback. Secrets are never sent back to the browser — only
+// whether they're set and a masked preview.
+function metaCheckVerifyToken(v) { return /^\S{8,100}$/.test(v); }
+
+async function buildMetaSettingsView() {
+  const mc = await metaconfig.getMetaConfig(true);
+  const d = metaconfig.derived(mc);
+  const platform = await db.getPlatformSettings();
+  let manual = {};
+  try { manual = JSON.parse(platform.meta_checklist_json || '{}') || {}; } catch (e) { manual = {}; }
+  return {
+    values: {
+      public_base_url: mc.publicBaseUrl,
+      app_id: mc.appId,
+      verify_token: mc.verifyToken,
+      wa_config_id: mc.waConfigId
+    },
+    app_secret_set: !!mc.appSecret,
+    app_secret_masked: mc.appSecret ? maskKey(mc.appSecret) : '',
+    wa_system_token_set: !!mc.waSystemToken,
+    wa_system_token_masked: mc.waSystemToken ? maskKey(mc.waSystemToken) : '',
+    sources: mc.sources,
+    derived: d,
+    https_ok: /^https:\/\//i.test(mc.publicBaseUrl),
+    graph_version: metaconfig.GRAPH_VERSION,
+    manual
+  };
+}
+
+app.get('/api/superadmin/meta-settings', requireSuperAdmin, async (req, res) => {
+  try {
+    res.json(await buildMetaSettingsView());
+  } catch (err) {
+    console.error('[meta-settings] load failed:', err);
+    res.status(500).json({ error: 'Could not load Meta settings.' });
+  }
+});
+
+app.post('/api/superadmin/meta-settings', requireSuperAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const update = {};
+    const current = await metaconfig.getMetaConfig(true);
+    const candidate = { ...current };
+
+    if (b.public_base_url !== undefined) {
+      const raw = String(b.public_base_url).trim();
+      if (raw === '') {
+        update.meta_public_base_url = '';
+      } else {
+        let u;
+        try { u = new URL(raw); } catch (e) { return res.status(400).json({ error: 'Public URL is not a valid web address (example: https://baybexai.digital).' }); }
+        const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+        if (u.protocol !== 'https:' && !(isLocal && u.protocol === 'http:')) {
+          return res.status(400).json({ error: 'Public URL must start with https:// — Meta only talks to secure addresses.' });
+        }
+        update.meta_public_base_url = u.origin;
+        candidate.publicBaseUrl = u.origin;
+      }
+    }
+    if (b.app_id !== undefined) {
+      const v = String(b.app_id).trim();
+      if (v !== '' && !/^\d{6,20}$/.test(v)) return res.status(400).json({ error: 'App ID should be digits only (find it in Meta → Settings → Basic).' });
+      update.meta_app_id = v;
+      candidate.appId = v || (current.sources.app_id === 'config.js' ? current.appId : '');
+    }
+    if (b.clear_app_secret === true) {
+      update.meta_app_secret = '';
+      candidate.appSecret = '';
+    } else if (b.app_secret !== undefined && String(b.app_secret).trim() !== '') {
+      const v = String(b.app_secret).trim();
+      if (!/^[A-Za-z0-9]{16,64}$/.test(v)) return res.status(400).json({ error: 'App Secret looks wrong — it is normally 32 letters/numbers with no spaces.' });
+      update.meta_app_secret = v;
+      candidate.appSecret = v;
+    }
+    if (b.verify_token !== undefined) {
+      const v = String(b.verify_token).trim();
+      if (v !== '' && !metaCheckVerifyToken(v)) return res.status(400).json({ error: 'Verify token must be 8–100 characters with no spaces.' });
+      update.meta_webhook_verify_token = v;
+    }
+    if (b.wa_config_id !== undefined) {
+      const v = String(b.wa_config_id).trim();
+      if (v !== '' && !/^\d{5,25}$/.test(v)) return res.status(400).json({ error: 'Embedded Signup Configuration ID should be digits only.' });
+      update.meta_wa_config_id = v;
+    }
+    if (b.wa_system_token !== undefined && String(b.wa_system_token).trim() !== '') {
+      const v = String(b.wa_system_token).trim();
+      if (!/^\S{20,600}$/.test(v)) return res.status(400).json({ error: 'WhatsApp system token looks wrong — it should be one long string with no spaces.' });
+      update.platform_wa_system_user_token = v;
+    }
+    if (b.manual && typeof b.manual === 'object') {
+      const platform = await db.getPlatformSettings();
+      let saved = {};
+      try { saved = JSON.parse(platform.meta_checklist_json || '{}') || {}; } catch (e) { saved = {}; }
+      for (const k of ['redirect_uri', 'domains', 'business_verified', 'permissions', 'app_live']) {
+        if (b.manual[k] !== undefined) saved[k] = !!b.manual[k];
+      }
+      update.meta_checklist_json = JSON.stringify(saved);
+    }
+
+    // If the App ID / Secret pair is changing, ask Meta whether it's real
+    // BEFORE saving. A wrong secret would make every signed webhook fail
+    // and silence every tenant's bot, so it's better refused up front. If
+    // Meta simply can't be reached we save anyway and say so.
+    let warning = null;
+    const credsChanged = update.meta_app_id !== undefined || update.meta_app_secret !== undefined;
+    if (credsChanged && candidate.appId && candidate.appSecret) {
+      try {
+        await metaconfig.fetchAppInfo(candidate);
+      } catch (err) {
+        const e = metaconfig.explainGraphError(err);
+        if (e.kind === 'rejected') {
+          return res.status(400).json({ error: 'Meta did not accept that App ID / App Secret pair: ' + e.message });
+        }
+        warning = e.message + ' The values were saved but could not be checked — use "Check with Meta" once your server has internet access.';
+      }
+    }
+
+    if (Object.keys(update).length) await db.updatePlatformSettings(update);
+    metaconfig.invalidate();
+    const view = await buildMetaSettingsView();
+    res.json({ ok: true, warning, settings: view });
+  } catch (err) {
+    console.error('[meta-settings] save failed:', err);
+    res.status(500).json({ error: 'Could not save Meta settings.' });
+  }
+});
+
+// Asks Meta directly what it knows: are the App ID/Secret real, and which
+// webhook callbacks are registered for this app right now.
+app.post('/api/superadmin/meta-verify', requireSuperAdmin, async (req, res) => {
+  const mc = await metaconfig.getMetaConfig(true);
+  const d = metaconfig.derived(mc);
+  if (!mc.appId || !mc.appSecret) {
+    return res.json({ ok: false, error: 'Save your App ID and App Secret first.' });
+  }
+  const out = { ok: true, app: null, subscriptions: [], expected_callback: d.webhook_url };
+  try {
+    out.app = await metaconfig.fetchAppInfo(mc);
+  } catch (err) {
+    const e = metaconfig.explainGraphError(err);
+    return res.json({ ok: false, error: e.kind === 'network' ? e.message : 'Meta rejected the App ID / Secret: ' + e.message });
+  }
+  let subs = [];
+  try {
+    subs = await metaconfig.fetchSubscriptions(mc);
+  } catch (err) {
+    out.subscriptions_error = metaconfig.explainGraphError(err).message;
+  }
+  out.subscriptions = metaconfig.WEBHOOK_OBJECTS.map((w) => {
+    const found = subs.find((s) => s.object === w.object);
+    return {
+      object: w.object,
+      label: w.label,
+      registered: !!found,
+      callback_url: found ? found.callback_url : null,
+      matches: !!found && found.callback_url === d.webhook_url,
+      active: found ? found.active !== false : false
+    };
   });
+  res.json(out);
+});
+
+// One click: tell Meta where to send Messenger, Instagram and WhatsApp
+// events. Meta immediately calls our GET /webhook with the verify token to
+// prove we own the URL, so this only works once the settings are saved and
+// the server is reachable at the public URL.
+app.post('/api/superadmin/meta-register-webhooks', requireSuperAdmin, async (req, res) => {
+  const mc = await metaconfig.getMetaConfig(true);
+  if (!mc.appId || !mc.appSecret) return res.status(400).json({ error: 'Save your App ID and App Secret first.' });
+  if (!/^https:\/\//i.test(mc.publicBaseUrl)) return res.status(400).json({ error: 'Set your public https:// address first — Meta only sends webhooks to secure URLs.' });
+  if (!mc.verifyToken) return res.status(400).json({ error: 'Set a webhook verify token first (the Generate button makes one).' });
+  const results = await metaconfig.registerWebhooks(mc);
+  res.json({ ok: results.every((r) => r.ok), results });
 });
 
 // ---- Per-tenant AI key override ----
@@ -904,6 +1093,7 @@ app.post('/api/superadmin/exit-impersonation', requireSuperAdmin, (req, res) => 
 });
 
 // ================= Static sites =================
+app.use('/shared', express.static(path.join(__dirname, 'public/shared')));
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/superadmin', express.static(path.join(__dirname, 'public/superadmin')));
 // Blog list/post pages are static HTML that fetch their content from the
