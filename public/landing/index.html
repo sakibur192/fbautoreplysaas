@@ -109,6 +109,12 @@
   .price-card li { padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .price-card li:first-child { border-top: none; }
   .trial-note { font-size: 13px; color: var(--sage); margin-top: 14px; }
+  .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; align-items: stretch; }
+  .price-grid .price-card { max-width: none; display: flex; flex-direction: column; transition: transform .25s ease, box-shadow .25s ease; }
+  .price-grid .price-card:hover { transform: translateY(-4px); box-shadow: 0 16px 36px -14px rgba(31,95,82,0.35); }
+  .price-grid .price-card ul { flex: 1; }
+  .price-card .plan-name { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--sage); margin-bottom: 6px; }
+  .price-grid:not(.multi) .price-card { max-width: 480px; }
 
   section.testimonials { padding: 64px 0; border-top: 1px solid var(--line); }
   section.testimonials h2 { font-size: 28px; margin-bottom: 30px; }
@@ -252,6 +258,7 @@
 
 <section class="pricing" id="pricing">
   <div class="wrap reveal" id="pricing-wrap">
+    <div class="price-grid" id="price-grid">
     <div class="price-card">
       <div class="amount">৳1,000 <small>/ month</small></div>
       <ul>
@@ -264,6 +271,8 @@
       <a href="#signup" class="btn">Start free trial</a>
       <div class="trial-note" id="pricing-note">3 days free, no payment needed to start. Pay by bKash once you're ready to continue.</div>
     </div>
+    </div>
+    <div class="trial-note" id="pricing-note-wrap" style="display:none;"></div>
   </div>
 </section>
 
@@ -427,7 +436,10 @@ async function loadSiteContent() {
     if (c.step2_body) document.getElementById('step2-body').textContent = c.step2_body;
     if (c.step3_title) document.getElementById('step3-title').textContent = c.step3_title;
     if (c.step3_body) document.getElementById('step3-body').textContent = c.step3_body;
-    if (c.pricing_note) document.getElementById('pricing-note').textContent = c.pricing_note;
+    if (c.pricing_note) {
+      document.getElementById('pricing-note').textContent = c.pricing_note;
+      document.getElementById('pricing-note-wrap').textContent = c.pricing_note;
+    }
 
     if (c.footer_text) {
       document.getElementById('site-footer').innerHTML = escapeHtml(c.footer_text) + ' &middot; <a href="/admin">Log in here</a>.';
@@ -466,6 +478,46 @@ async function loadSiteContent() {
     console.warn('Could not load site content', e);
   }
 }
+
+function formatDuration(days) {
+  if (days === 30) return 'month';
+  if (days === 90) return '3 months';
+  if (days === 180) return '6 months';
+  if (days === 365) return 'year';
+  return days + ' days';
+}
+
+// Pricing cards come from the plans you set in /superadmin → Plans. If
+// there are none (or the request fails) the built-in card above stays.
+async function loadPlans() {
+  try {
+    const res = await fetch('/api/public-plans');
+    const plans = await res.json();
+    if (!Array.isArray(plans) || !plans.length) return;
+    const note = document.getElementById('pricing-note').textContent;
+    const grid = document.getElementById('price-grid');
+    grid.classList.toggle('multi', plans.length > 1);
+    grid.innerHTML = plans.map(p =>
+      '<div class="price-card">' +
+        '<div class="plan-name">' + escapeHtml(p.name) + '</div>' +
+        '<div class="amount">৳' + Number(p.price_bdt).toLocaleString() + ' <small>/ ' + formatDuration(p.duration_days) + '</small></div>' +
+        '<ul>' +
+          '<li>' + Number(p.reply_limit).toLocaleString() + ' AI replies per cycle</li>' +
+          '<li>Facebook, Instagram &amp; WhatsApp</li>' +
+          '<li>Your own product catalog</li>' +
+          '<li>Conversation log, with manual takeover anytime</li>' +
+        '</ul>' +
+        '<a href="#signup" class="btn">Start free trial</a>' +
+      '</div>'
+    ).join('');
+    const noteEl = document.getElementById('pricing-note-wrap');
+    noteEl.textContent = note;
+    noteEl.style.display = 'block';
+  } catch (e) {
+    console.warn('Could not load plans', e);
+  }
+}
+loadPlans();
 loadSiteContent();
 
 // Sticky header gets a subtle shadow once the page has scrolled.

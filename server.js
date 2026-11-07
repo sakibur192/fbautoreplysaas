@@ -580,25 +580,85 @@ app.post('/api/superadmin/tenants/:id/test-ai', requireSuperAdmin, async (req, r
 });
 
 // ---- Plans ----
+// Validates the plan form. Price may be 0 (a free plan); everything else
+// has to be a positive whole number. Returns { error } or { value }.
+function parsePlanBody(body) {
+  const name = String((body && body.name) || '').trim();
+  const reply_limit = parseInt(body && body.reply_limit, 10);
+  const price_bdt = parseInt(body && body.price_bdt, 10);
+  const duration_days = parseInt(body && body.duration_days, 10);
+  if (!name) return { error: 'Plan name is required.' };
+  if (name.length > 80) return { error: 'Plan name is too long (80 characters max).' };
+  if (!Number.isInteger(reply_limit) || reply_limit < 1) return { error: 'Reply limit must be a whole number of 1 or more.' };
+  if (!Number.isInteger(price_bdt) || price_bdt < 0) return { error: 'Price must be a whole number of 0 or more (BDT).' };
+  if (!Number.isInteger(duration_days) || duration_days < 1) return { error: 'Duration must be a whole number of days, 1 or more.' };
+  return { value: { name, reply_limit, price_bdt, duration_days } };
+}
+
 app.get('/api/superadmin/plans', requireSuperAdmin, async (req, res) => {
-  res.json(await db.listPlans(false));
+  try {
+    res.json(await db.listPlans(false));
+  } catch (err) {
+    console.error('List plans failed:', err);
+    res.status(500).json({ error: 'Could not load plans.' });
+  }
 });
 app.post('/api/superadmin/plans', requireSuperAdmin, async (req, res) => {
-  const { name, reply_limit, price_bdt, duration_days } = req.body;
-  if (!name || !reply_limit || !price_bdt || !duration_days) {
-    return res.status(400).json({ error: 'Name, reply limit, price, and duration are required' });
+  const parsed = parsePlanBody(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  try {
+    const v = parsed.value;
+    res.json(await db.createPlan(v.name, v.reply_limit, v.price_bdt, v.duration_days));
+  } catch (err) {
+    console.error('Create plan failed:', err);
+    res.status(500).json({ error: 'Could not save the plan.' });
   }
-  const plan = await db.createPlan(name, parseInt(reply_limit, 10), parseInt(price_bdt, 10), parseInt(duration_days, 10));
-  res.json(plan);
 });
 app.put('/api/superadmin/plans/:id', requireSuperAdmin, async (req, res) => {
-  const { name, reply_limit, price_bdt, duration_days } = req.body;
-  await db.updatePlan(req.params.id, name, parseInt(reply_limit, 10), parseInt(price_bdt, 10), parseInt(duration_days, 10));
-  res.json({ ok: true });
+  const parsed = parsePlanBody(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  try {
+    const existing = await db.getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Plan not found.' });
+    const v = parsed.value;
+    await db.updatePlan(existing.id, v.name, v.reply_limit, v.price_bdt, v.duration_days);
+    res.json(await db.getPlanById(existing.id));
+  } catch (err) {
+    console.error('Update plan failed:', err);
+    res.status(500).json({ error: 'Could not save the plan.' });
+  }
 });
 app.post('/api/superadmin/plans/:id/deactivate', requireSuperAdmin, async (req, res) => {
-  await db.deactivatePlan(req.params.id);
-  res.json({ ok: true });
+  try {
+    await db.deactivatePlan(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Deactivate plan failed:', err);
+    res.status(500).json({ error: 'Could not deactivate the plan.' });
+  }
+});
+app.post('/api/superadmin/plans/:id/activate', requireSuperAdmin, async (req, res) => {
+  try {
+    await db.activatePlan(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Activate plan failed:', err);
+    res.status(500).json({ error: 'Could not activate the plan.' });
+  }
+});
+
+// Public: the active plans, so the landing page's pricing section always
+// matches what you set in /superadmin → Plans. No auth, no private fields.
+app.get('/api/public-plans', async (req, res) => {
+  try {
+    const plans = await db.listPlans(true);
+    res.json(plans.map(p => ({
+      id: p.id, name: p.name, reply_limit: p.reply_limit, price_bdt: p.price_bdt, duration_days: p.duration_days
+    })));
+  } catch (err) {
+    console.error('Public plans failed:', err);
+    res.json([]);
+  }
 });
 
 // ================= Website (public marketing site) — super admin controls =================

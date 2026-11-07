@@ -23,9 +23,9 @@
   .card { background: #fff; border-radius: 14px; padding: 28px; box-shadow: 0 2px 14px rgba(84,49,179,0.08); border: 1px solid var(--card-line); }
   .card input { display: block; width: 260px; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; }
   button, .btn { background: var(--grad-brand); background-size: 160% 160%; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .btn.danger { background: var(--danger); }
-  .btn.success { background: linear-gradient(135deg, #16a34a, #22c55e); }
-  .btn.secondary { background: #4b5563; }
+  button.danger, .btn.danger { background: var(--danger); }
+  button.success, .btn.success { background: linear-gradient(135deg, #16a34a, #22c55e); }
+  button.secondary, .btn.secondary { background: #4b5563; }
   #app { display: none; }
   .app-shell { display: flex; align-items: stretch; min-height: 100vh; }
   .sidebar {
@@ -706,21 +706,87 @@ function onNewPlanDurationChange() {
   document.getElementById('new-plan-duration-custom').style.display = custom ? 'block' : 'none';
 }
 
+// Like api(), but throws the server's own message on a non-2xx response so
+// the caller can show it — api() would hand back {error: ...} and the
+// caller would carry on as if the save worked.
+async function apiStrict(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (res.status === 401) { showLogin(); throw new Error('Your session expired — please log in again.'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* non-JSON body */ }
+  if (!res.ok) throw new Error((data && data.error) || ('Request failed (' + res.status + ')'));
+  return data;
+}
+
+let planCache = [];
+
 async function loadPlans() {
-  const plans = await api('/api/superadmin/plans');
+  let plans;
+  try {
+    plans = await apiStrict('/api/superadmin/plans');
+  } catch (err) {
+    toast(err.message, 'error');
+    return;
+  }
+  planCache = plans;
   const tbody = document.getElementById('plan-rows');
   tbody.innerHTML = '';
+  if (!plans.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No plans yet — add your first one below.</td></tr>';
+    return;
+  }
   plans.forEach(p => {
     const tr = document.createElement('tr');
-    if (!p.active) tr.style.opacity = '0.5';
+    tr.id = 'plan-row-' + p.id;
+    if (!p.active) tr.style.opacity = '0.55';
     tr.innerHTML =
-      '<td>' + escapeHtml(p.name) + (p.active ? '' : ' (inactive)') + '</td>' +
+      '<td>' + escapeHtml(p.name) + (p.active ? '' : ' <em>(inactive)</em>') + '</td>' +
       '<td>' + p.reply_limit.toLocaleString() + '</td>' +
-      '<td>৳' + p.price_bdt + '</td>' +
+      '<td>৳' + p.price_bdt.toLocaleString() + '</td>' +
       '<td>' + formatDuration(p.duration_days) + '</td>' +
-      '<td>' + (p.active ? '<button class="danger" onclick="deactivatePlan(' + p.id + ')">Deactivate</button>' : '') + '</td>';
+      '<td style="white-space:nowrap;">' +
+        '<button class="secondary" onclick="editPlan(' + p.id + ')">Edit</button> ' +
+        (p.active
+          ? '<button class="danger" onclick="deactivatePlan(' + p.id + ')">Deactivate</button>'
+          : '<button class="success" onclick="activatePlan(' + p.id + ')">Activate</button>') +
+      '</td>';
     tbody.appendChild(tr);
   });
+}
+
+// Swap a plan row into editable inputs. Save sends the whole row; Cancel
+// just re-renders from the cached list.
+function editPlan(id) {
+  const p = planCache.find(x => x.id === id);
+  if (!p) return;
+  const tr = document.getElementById('plan-row-' + id);
+  tr.style.opacity = '1';
+  tr.innerHTML =
+    '<td><input id="ep-name-' + id + '" type="text" style="width:100%;" value="' + escapeHtml(p.name).replace(/"/g, '&quot;') + '" /></td>' +
+    '<td><input id="ep-limit-' + id + '" type="number" min="1" style="width:110px;" value="' + p.reply_limit + '" /></td>' +
+    '<td><input id="ep-price-' + id + '" type="number" min="0" style="width:100px;" value="' + p.price_bdt + '" /></td>' +
+    '<td><input id="ep-days-' + id + '" type="number" min="1" style="width:90px;" value="' + p.duration_days + '" /> <span style="font-size:12px;color:#6b7280;">days</span></td>' +
+    '<td style="white-space:nowrap;">' +
+      '<button onclick="savePlan(' + id + ')">Save</button> ' +
+      '<button class="secondary" onclick="loadPlans()">Cancel</button>' +
+    '</td>';
+  document.getElementById('ep-name-' + id).focus();
+}
+
+async function savePlan(id) {
+  const body = {
+    name: document.getElementById('ep-name-' + id).value.trim(),
+    reply_limit: document.getElementById('ep-limit-' + id).value,
+    price_bdt: document.getElementById('ep-price-' + id).value,
+    duration_days: document.getElementById('ep-days-' + id).value
+  };
+  try {
+    await apiStrict('/api/superadmin/plans/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    toast('Plan updated');
+    loadPlans();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 async function addPlan() {
@@ -729,8 +795,12 @@ async function addPlan() {
   const price_bdt = document.getElementById('new-plan-price').value;
   const durationSelect = document.getElementById('new-plan-duration').value;
   const duration_days = durationSelect === 'custom' ? document.getElementById('new-plan-duration-custom').value : durationSelect;
-  if (!name || !reply_limit || !price_bdt || !duration_days) return;
-  await api('/api/superadmin/plans', { method: 'POST', body: JSON.stringify({ name, reply_limit, price_bdt, duration_days }) });
+  try {
+    await apiStrict('/api/superadmin/plans', { method: 'POST', body: JSON.stringify({ name, reply_limit, price_bdt, duration_days }) });
+  } catch (err) {
+    toast(err.message, 'error');
+    return;
+  }
   document.getElementById('new-plan-name').value = '';
   document.getElementById('new-plan-limit').value = '';
   document.getElementById('new-plan-price').value = '';
@@ -742,9 +812,19 @@ async function addPlan() {
 }
 
 async function deactivatePlan(id) {
-  await api('/api/superadmin/plans/' + id + '/deactivate', { method: 'POST' });
-  loadPlans();
-  toast('Plan deactivated');
+  try {
+    await apiStrict('/api/superadmin/plans/' + id + '/deactivate', { method: 'POST' });
+    toast('Plan deactivated — tenants can no longer pick it, existing subscribers keep it');
+    loadPlans();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function activatePlan(id) {
+  try {
+    await apiStrict('/api/superadmin/plans/' + id + '/activate', { method: 'POST' });
+    toast('Plan activated');
+    loadPlans();
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 // ================= Website (public landing page) =================

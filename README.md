@@ -92,6 +92,10 @@ Tenants subscribe to a **plan** you define — e.g. "Starter: 5,000 replies / 2,
 
 There is no seeded/default plan list — a brand-new deployment starts with **zero plans**, by design, so pricing is entirely yours to set. Create at least one plan from `/superadmin` → Plans before pointing real tenants at the Billing tab, or their only option there will be to stay on the free trial.
 
+**Editing plans.** In `/superadmin` → Plans each row has **Edit** (change name, reply limit, price, or duration in place, then Save), **Deactivate** (hides it from new sign-ups; tenants already on it keep it) and, for deactivated plans, **Activate**. A price of 0 is allowed for a free plan. Errors from the server (an empty field, a non-numeric price) now show as a red message instead of being silently ignored.
+
+**The public pricing section follows your plans.** The landing page's pricing cards are generated from your *active* plans (name, price, duration, reply limit), so editing or adding a plan changes the website immediately — no separate pricing text to keep in sync. If you have no active plans yet, the page falls back to its built-in single card. The line under the cards ("3 days free…") is still the **Pricing note** in Website settings.
+
 Tenants pick and switch plans themselves from their **Billing** tab — no approval needed for the switch itself; they still submit a bKash Trx ID and you still approve it the same manual way as before, which extends their subscription **and resets their reply-usage counter** for a fresh cycle.
 
 **What happens at the limit:** once a tenant hits their plan's reply count for the current cycle, the AI is never called again that cycle — no wasted API cost — and the customer gets a distinct **limit-reached message** (editable, separate from the "AI is down" fallback message) instead. A tenant with no plan assigned yet (e.g. still in trial) has unlimited replies.

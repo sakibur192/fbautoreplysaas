@@ -449,6 +449,10 @@ async function deactivatePlan(id) {
   await pool.query('UPDATE plans SET active = false WHERE id = $1', [id]);
 }
 
+async function activatePlan(id) {
+  await pool.query('UPDATE plans SET active = true WHERE id = $1', [id]);
+}
+
 async function setTenantPlan(tenantId, planId) {
   await pool.query('UPDATE tenants SET plan_id = $1 WHERE id = $2', [planId || null, tenantId]);
 }
@@ -991,6 +995,7 @@ module.exports = {
   createPlan,
   updatePlan,
   deactivatePlan,
+  activatePlan,
   setTenantPlan,
   resetUsageCycle,
   getReplyUsage,
